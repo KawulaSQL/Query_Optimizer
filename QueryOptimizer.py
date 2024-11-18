@@ -9,15 +9,13 @@ class QueryOptimizer:
         self.query_tree = None
 
     def parse(self) -> ParsedQuery:
-        start = ["select", "update", "delete"]
 
         if self.query is None:
             raise Exception("Query is not set")
 
-        res = ParsedQuery(self.query, None)
+        res = ParsedQuery(self.query)
 
         if self.query.to_lower() in "select":
-            column = ""
             match = re.search(r"SELECT (.+?) FROM", self.query, re.IGNORECASE)
             if match:
                 temp = match.group(1)
@@ -43,9 +41,14 @@ class QueryOptimizer:
 
             cons = condition.split("AND")
             temp_par = q1
-            for con in cons:
-                q2 = QueryTree(type="sigma", val="B", condition=con, child=list(), parent=temp_par)
-                q1.child.append(q2)
+            val = "B"
+            for i, con in cons:
+                q2 = QueryTree(type="sigma", val=val, condition=con, child=list(), parent=temp_par)
+                temp_par.child.append(q2)
+                temp_par = q2
+                val = chr(ord(val) + 1)
+
+
 
 
 

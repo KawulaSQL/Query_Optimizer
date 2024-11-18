@@ -14,4 +14,4 @@ class QueryTree:
 @dataclass
 class ParsedQuery:
     query: str
-    query_tree: QueryTree
+    query_tree: Optional[QueryTree] = None
