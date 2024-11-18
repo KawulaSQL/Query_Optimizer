@@ -1,13 +1,14 @@
 from dataclasses import dataclass, field
-from typing import List
+from typing import List, Optional
 
 
 @dataclass
 class QueryTree:
     type: str
     val : str
+    condition: str
     child: List['QueryTree'] = field(default_factory=list)
-    parent: 'QueryTree' = None
+    parent: Optional['QueryTree'] = None
 
 
 @dataclass
