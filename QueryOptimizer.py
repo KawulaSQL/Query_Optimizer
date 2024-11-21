@@ -50,8 +50,55 @@ class QueryOptimizer:
 
         return res
 
-    def optimize(self) -> ParsedQuery:
-        return self.query
+    def optimize(self, query: ParsedQuery) -> ParsedQuery:
+        if query.query_tree is None:
+            raise Exception("Query is not set")
+        
+        process_query = [query.query_tree] # start with root node
+        
+        while process_query:
+            node = process_query.pop() # process the current node
+            
+            if node.type == "sigma":
+                if len(node.child) == 1 and node.child[0].type in ["join", "table"]:
+                    child_node = node.child[0]
+                    
+                    if child_node.type == "join":
+                    # Split kondisi seleksi untuk join
+                        conditions = node.condition.split(" AND ")
+                        left_conditions = []
+                        right_conditions = []
+                        other_conditions = []
+                        
+                        if left_conditions:
+                            left_sigma = QueryTree(
+                                type="sigma",
+                                val=node.val + "_L",
+                                condition=" AND ".join(left_conditions),
+                                child=[child_node.child[0]],
+                                parent=child_node,
+                            )
+                            child_node.child[0].parent = left_sigma
+                            child_node.child[0] = left_sigma 
+                        
+                        if right_conditions:
+                            right_sigma = QueryTree(
+                                type="sigma",
+                                val=node.val + "_R",
+                                condition=" AND ".join(right_conditions),
+                                child=[child_node.child[1]],
+                                parent=child_node,
+                            )
+                            child_node.child[1].parent = right_sigma
+                            child_node.child[1] = right_sigma
+                            
+                        if other_conditions:
+                            node.condition = " AND ".join(other_conditions)
+                        else:
+                            node.child = child_node.child
+                            node.type = child_node.type
+                            node.condition = child_node.condition
+                            node.val = child_node.val
         
     def get_cost(self, query: QueryTree) -> int:
         stats = self.get_stats()
