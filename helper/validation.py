@@ -73,9 +73,3 @@ def validate_columns(query_columns):
     )
 
     return pattern.match(query_columns) is not None
-
-
-
-
-
-

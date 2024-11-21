@@ -1,54 +1,105 @@
 import re
 
+from helper.get_object import get_limit, get_column_from_order_by, get_column_from_group_by, get_condition_from_where, \
+    get_columns_from_select
+from helper.validation import validate_query
 from model.models import ParsedQuery, QueryTree
 from typing import Dict, Any
+
 
 class QueryOptimizer:
     def __init__(self, query):
         self.query = query
-        self.query_tree = None
+        self.parse_result: ParsedQuery = None
 
     def parse(self) -> ParsedQuery:
 
         if self.query is None:
             raise Exception("Query is not set")
 
-        res = ParsedQuery(self.query)
+        try:
+            if not validate_query(self.query):
+                raise Exception("Invalid query")
 
-        if self.query.lower() in "select":
-            match = re.search(r"SELECT (.+?) FROM", self.query, re.IGNORECASE)
-            if match:
-                temp = match.group(1)
-                column = temp
-            else:
-                raise Exception("Syntax not valid")
+            self.parse_result = ParsedQuery(query=self.query)
 
-            if column == "":
-                raise Exception("Column is not set")
+            if self.query.upper().startswith("SELECT"):
+                q1, q2, q3, proj = None, None, None, None
+                val = "A"
 
-            q1 = QueryTree(type="project", val="A", condition=column, child=list())
+                if get_columns_from_select(self.query) != "*":
+                    proj = QueryTree(type="project", val=val, condition=get_columns_from_select(self.query), child=list())
+                    val = chr(ord(val) + 1)
+                    self.parse_result.query_tree = proj
 
-            match = re.search(r"WHERE (.+?) ORDER BY", self.query, re.IGNORECASE)
+                if self.query.upper().find("LIMIT") != -1:
+                    lim = get_limit(self.query)
+                    q1 = QueryTree(type="limit", val=val, condition=lim, child=list())
+                    val = chr(ord(val) + 1)
 
-            if match:
-                temp = match.group(1)
-                condition = temp
-            else:
-                raise Exception("Syntax not valid")
+                    if proj is not None:
+                        proj.child.append(q1)
+                        q1.parent = proj
+                    else:
+                        self.parse_result.query_tree = q1
 
-            if condition == "":
-                raise Exception("Condition is not set")
+                if self.query.upper().find("ORDER BY") != -1:
+                    order = get_column_from_order_by(self.query)
+                    q2 = QueryTree(type="sort", val=val, condition=order, child=list())
 
-            cons = condition.split("AND")
-            temp_par = q1
-            val = "B"
-            for i, con in cons:
-                q2 = QueryTree(type="sigma", val=val, condition=con, child=list(), parent=temp_par)
-                temp_par.child.append(q2)
-                temp_par = q2
-                val = chr(ord(val) + 1)
+                    if q1 is not None:
+                        q1.child.append(q2)
+                        q2.parent = q1
+                    else:
+                        self.parse_result.query_tree = q2
 
-        return res
+                    val = chr(ord(val) + 1)
+
+                if self.query.upper().find("GROUP BY") != -1:
+                    group_by = get_column_from_group_by(self.query)
+                    q3 = QueryTree(type="group", val=val, condition=group_by, child=list())
+
+                    if q2 is not None:
+                        q2.child.append(q3)
+                        q3.parent = q2
+                    elif q1 is not None:
+                        q1.child.append(q3)
+                        q3.parent = q1
+                    else:
+                        self.parse_result.query_tree = q3
+
+                    val = chr(ord(val) + 1)
+
+                if self.query.upper().find("WHERE") != -1:
+                    where = get_condition_from_where(self.query)
+                    where_split = where.split(" AND ")
+                    q4 = QueryTree(type="sigma", val=val, condition=where, child=list())
+                    temp_parent = q4
+                    val = chr(ord(val) + 1)
+                    for w in where_split:
+                        q5 = QueryTree(type="sigma", val=val, condition=w, child=list(), parent=temp_parent)
+                        temp_parent.child.append(q5)
+                        temp_parent = q5
+                        val = chr(ord(val) + 1)
+
+                    if q3 is not None:
+                        q3.child.append(q4)
+                        q4.parent = q3
+                    elif q2 is not None:
+                        q2.child.append(q4)
+                        q4.parent = q2
+                    elif q1 is not None:
+                        q1.child.append(q4)
+                        q4.parent = q1
+                    else:
+                        self.parse_result.query_tree = q4
+
+
+
+        except Exception as e:
+            raise Exception(f"Error parsing query: {str(e)}")
+
+        return self.parse_result
 
     def optimize(self, query: ParsedQuery) -> ParsedQuery:
         if query.query_tree is None:
