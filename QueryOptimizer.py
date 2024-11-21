@@ -1,5 +1,3 @@
-import re
-
 from helper.get_object import get_limit, get_column_from_order_by, get_column_from_group_by, get_condition_from_where, \
     get_columns_from_select
 from helper.validation import validate_query
