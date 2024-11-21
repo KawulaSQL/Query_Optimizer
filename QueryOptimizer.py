@@ -163,6 +163,23 @@ class QueryOptimizer:
         }
         return stats
 
+    def print_query_tree(self, node, depth=0):
+        if node is None:
+            return
+        
+        indent = "--" * depth + "> "
+        if node.type == "project":
+            print(f"{indent}project {node.condition}")
+        elif node.type == "sigma":
+            print(f"{indent}sigma {node.condition}")
+        elif node.type == "join":
+            print(f"{indent}join {node.condition}")
+        elif node.type == "table":
+            print(f"{indent}table {node.val}")
+        
+        for child in node.child:
+            self.print_query_tree(child, depth + 1)
+
 # MOCK DATA
 
 # SELECT nama, alamat FROM mahasiswa WHERE nama = 'budi';
@@ -214,4 +231,5 @@ q_j4.child.append(q_t4_reviews)  # Join's second child is the reviews table
 
 test = QueryOptimizer("")
 
+test.print_query_tree(q_p4)
 print(f"Cost: {test.get_cost(q_p4)}")
