@@ -1,5 +1,5 @@
 from helper.get_object import get_limit, get_column_from_order_by, get_column_from_group_by, get_condition_from_where, \
-    get_columns_from_select
+    get_columns_from_select, get_from_table
 from helper.validation import validate_query
 from model.models import ParsedQuery, QueryTree
 from typing import Dict, Any
@@ -22,7 +22,7 @@ class QueryOptimizer:
             self.parse_result = ParsedQuery(query=self.query)
 
             if self.query.upper().startswith("SELECT"):
-                q1, q2, q3, proj = None, None, None, None
+                q1, q2, q3, q4, q5, proj = None, None, None, None, None, None
                 val = "A"
 
                 if get_columns_from_select(self.query) != "*":
@@ -48,6 +48,9 @@ class QueryOptimizer:
                     if q1 is not None:
                         q1.child.append(q2)
                         q2.parent = q1
+                    elif proj is not None:
+                        proj.child.append(q2)
+                        q2.parent = proj
                     else:
                         self.parse_result.query_tree = q2
 
@@ -63,6 +66,9 @@ class QueryOptimizer:
                     elif q1 is not None:
                         q1.child.append(q3)
                         q3.parent = q1
+                    elif proj is not None:
+                        proj.child.append(q3)
+                        q3.parent = proj
                     else:
                         self.parse_result.query_tree = q3
 
@@ -89,8 +95,33 @@ class QueryOptimizer:
                     elif q1 is not None:
                         q1.child.append(q4)
                         q4.parent = q1
+                    elif proj is not None:
+                        proj.child.append(q4)
+                        q4.parent = proj
                     else:
                         self.parse_result.query_tree = q4
+
+                if self.query.upper().find("JOIN") == -1 and self.query.upper().find("NATURAL JOIN") == -1:
+                    from_table = get_from_table(self.query)
+                    q5 = QueryTree(type="table", val=from_table, condition="", child=list())
+
+                    if q4 is not None:
+                        q4.child.append(q5)
+                        q5.parent = q4
+                    elif q3 is not None:
+                        q3.child.append(q5)
+                        q5.parent = q3
+                    elif q2 is not None:
+                        q2.child.append(q5)
+                        q5.parent = q2
+                    elif q1 is not None:
+                        q1.child.append(q5)
+                        q5.parent = q1
+                    elif proj is not None:
+                        proj.child.append(q5)
+                        q5.parent = proj
+                    else:
+                        self.parse_result.query_tree = q5
 
 
 
@@ -278,7 +309,9 @@ q_s4.child.append(q_j4)  # Selection's child is the join node
 q_j4.child.append(q_t4_movies)  # Join's first child is the movies table
 q_j4.child.append(q_t4_reviews)  # Join's second child is the reviews table
 
-test = QueryOptimizer("")
+test = QueryOptimizer("SELECT nama, alamat FROM mahasiswa WHERE nama = 'budi';")
 
 test.print_query_tree(q_p4)
 print(f"Cost: {test.get_cost(q_p4)}")
+
+print(test.parse())
