@@ -22,7 +22,7 @@ class QueryOptimizer:
             self.parse_result = ParsedQuery(query=self.query)
 
             if self.query.upper().startswith("SELECT"):
-                q1, q2, q3, q4, q5, proj = None, None, None, None, None, None
+                q1, q2, q3, q4, q5, q6, proj = None, None, None, None, None, None, None
                 val = "A"
 
                 if get_columns_from_select(self.query) != "*":
@@ -103,25 +103,28 @@ class QueryOptimizer:
 
                 if self.query.upper().find("JOIN") == -1 and self.query.upper().find("NATURAL JOIN") == -1:
                     from_table = get_from_table(self.query)
-                    q5 = QueryTree(type="table", val=from_table, condition="", child=list())
+                    q6 = QueryTree(type="table", val=from_table, condition="", child=list())
 
-                    if q4 is not None:
-                        q4.child.append(q5)
-                        q5.parent = q4
+                    if q5 is not None:
+                        q5.child.append(q6)
+                        q6.parent = q5
+                    elif q4 is not None:
+                        q4.child.append(q6)
+                        q6.parent = q4
                     elif q3 is not None:
-                        q3.child.append(q5)
-                        q5.parent = q3
+                        q3.child.append(q6)
+                        q6.parent = q3
                     elif q2 is not None:
-                        q2.child.append(q5)
-                        q5.parent = q2
+                        q2.child.append(q6)
+                        q6.parent = q2
                     elif q1 is not None:
-                        q1.child.append(q5)
-                        q5.parent = q1
+                        q1.child.append(q6)
+                        q6.parent = q1
                     elif proj is not None:
-                        proj.child.append(q5)
-                        q5.parent = proj
+                        proj.child.append(q6)
+                        q6.parent = proj
                     else:
-                        self.parse_result.query_tree = q5
+                        self.parse_result.query_tree = q6
 
 
 
@@ -311,7 +314,7 @@ q_j4.child.append(q_t4_reviews)  # Join's second child is the reviews table
 
 test = QueryOptimizer("SELECT nama, alamat FROM mahasiswa WHERE nama = 'budi' AND kontak = 'anu' LIMIT 10;")
 
-test.print_query_tree(q_p4)
+test.print_query_tree(test.parse().query_tree)
 print(f"Cost: {test.get_cost(q_p4)}")
 
 print(test.parse())
