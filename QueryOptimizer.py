@@ -77,11 +77,11 @@ class QueryOptimizer:
                 if self.query.upper().find("WHERE") != -1:
                     where = get_condition_from_where(self.query)
                     where_split = where.split(" AND ")
-                    q4 = QueryTree(type="sigma", val=val, condition=where, child=list())
+                    q4 = QueryTree(type="sigma", val=val, condition=where_split[0], child=list())
                     temp_parent = q4
                     val = chr(ord(val) + 1)
-                    for w in where_split:
-                        q5 = QueryTree(type="sigma", val=val, condition=w, child=list(), parent=temp_parent)
+                    for i in range(1, len(where_split)):
+                        q5 = QueryTree(type="sigma", val=val, condition=where_split[i], child=list(), parent=temp_parent)
                         temp_parent.child.append(q5)
                         temp_parent = q5
                         val = chr(ord(val) + 1)
@@ -309,7 +309,7 @@ q_s4.child.append(q_j4)  # Selection's child is the join node
 q_j4.child.append(q_t4_movies)  # Join's first child is the movies table
 q_j4.child.append(q_t4_reviews)  # Join's second child is the reviews table
 
-test = QueryOptimizer("SELECT nama, alamat FROM mahasiswa WHERE nama = 'budi';")
+test = QueryOptimizer("SELECT nama, alamat FROM mahasiswa WHERE nama = 'budi' AND kontak = 'anu' LIMIT 10;")
 
 test.print_query_tree(q_p4)
 print(f"Cost: {test.get_cost(q_p4)}")
