@@ -1,14 +1,20 @@
 from helper.get_object import get_limit, get_column_from_order_by, get_column_from_group_by, get_condition_from_where, \
-    get_columns_from_select, get_from_table
+    get_columns_from_select, get_from_table, extract_set_conditions, extract_table_update
 from helper.get_stats import get_stats
 from helper.validation import validate_query
 from model.models import ParsedQuery, QueryTree
+
 
 class QueryOptimizer:
     def __init__(self, query):
         self.query = query
         self.parse_result: ParsedQuery = None
 
+    """
+    Parse query that will return ParsedQuery object
+    please use this function with try except block
+    because this function will raise exception if the query is not valid
+    """
     def parse(self) -> ParsedQuery:
 
         if self.query is None:
@@ -20,6 +26,7 @@ class QueryOptimizer:
 
             self.parse_result = ParsedQuery(query=self.query)
 
+            # Parse SELECT condition
             if self.query.upper().startswith("SELECT"):
                 q1, q2, q3, q4, q5, q6, proj = None, None, None, None, None, None, None
                 val = "A"
@@ -125,7 +132,130 @@ class QueryOptimizer:
                     else:
                         self.parse_result.query_tree = q6
 
+                if self.query.upper().find("NATURAL JOIN") != -1:
+                    join = get_from_table(self.query)
+                    join_split = join.split(" NATURAL JOIN ")
+                    join_table1 = join_split[0]
+                    join_table2 = join_split[1]
+                    q7 = QueryTree(type="natural join", val=val, condition="", child=list())
 
+                    q8 = QueryTree(type="table", val=join_table1, condition="", child=list(), parent=q7)
+                    q9 = QueryTree(type="table", val=join_table2, condition="", child=list(), parent=q7)
+
+                    q7.child.append(q8)
+                    q7.child.append(q9)
+
+                    q8.parent = q7
+                    q9.parent = q7
+
+                    if q6 is not None:
+                        q6.child.append(q7)
+                        q7.parent = q6
+                    elif q5 is not None:
+                        q5.child.append(q7)
+                        q7.parent = q5
+                    elif q4 is not None:
+                        q4.child.append(q7)
+                        q7.parent = q4
+                    elif q3 is not None:
+                        q3.child.append(q7)
+                        q7.parent = q3
+                    elif q2 is not None:
+                        q2.child.append(q7)
+                        q7.parent = q2
+                    elif q1 is not None:
+                        q1.child.append(q7)
+                        q7.parent = q1
+                    elif proj is not None:
+                        proj.child.append(q7)
+                        q7.parent = proj
+                    else:
+                        self.parse_result.query_tree = q7
+
+                elif self.query.upper().find("NATURAL JOIN") != -1:
+                    join = get_from_table(self.query)
+                    join_split = join.split(" JOIN ")
+                    join_table1 = join_split[0]
+                    join_table2 = join_split[1].split(" ON ")[0]
+                    join_condition = join_split[1]
+                    q7 = QueryTree(type="join", val=val, condition=join_condition, child=list())
+
+                    q8 = QueryTree(type="table", val=join_table1, condition="", child=list(), parent=q7)
+                    q9 = QueryTree(type="table", val=join_table2, condition="", child=list(), parent=q7)
+
+                    q7.child.append(q8)
+                    q7.child.append(q9)
+
+                    q8.parent = q7
+                    q9.parent = q7
+
+                    if q6 is not None:
+                        q6.child.append(q7)
+                        q7.parent = q6
+                    elif q5 is not None:
+                        q5.child.append(q7)
+                        q7.parent = q5
+                    elif q4 is not None:
+                        q4.child.append(q7)
+                        q7.parent = q4
+                    elif q3 is not None:
+                        q3.child.append(q7)
+                        q7.parent = q3
+                    elif q2 is not None:
+                        q2.child.append(q7)
+                        q7.parent = q2
+                    elif q1 is not None:
+                        q1.child.append(q7)
+                        q7.parent = q1
+                    elif proj is not None:
+                        proj.child.append(q7)
+                        q7.parent = proj
+                    else:
+                        self.parse_result.query_tree = q7
+
+            # Parse UPDATE condition
+            elif self.query.upper().startswith("UPDATE"):
+                set_condition = extract_set_conditions(self.query)
+                update_table = extract_table_update(self.query)
+                where_condition = get_condition_from_where(self.query)
+
+                q1, q2, q3 = None, None, None
+                val = "A"
+                temp_parent = None
+
+                for condition in set_condition:
+                    q1 = QueryTree(type="update", val=val, condition=condition, child=list())
+                    if temp_parent is not None:
+                        temp_parent.child.append(q1)
+                        q1.parent = temp_parent
+                    else:
+                        self.parse_result.query_tree = q1
+                    temp_parent = q1
+                    val = chr(ord(val) + 1)
+
+                if where_condition:
+                    where_condition_split = where_condition.split(" AND ")
+                    q2 = QueryTree(type="sigma", val=val, condition=where_condition_split[0], child=list())
+                    temp_parent = q2
+                    val = chr(ord(val) + 1)
+                    for i in range(1, len(where_condition_split)):
+                        q3 = QueryTree(type="sigma", val=val, condition=where_condition_split[i], child=list(), parent=temp_parent)
+                        temp_parent.child.append(q3)
+                        temp_parent = q3
+                        val = chr(ord(val) + 1)
+                    q1.child.append(q2)
+                    q2.parent = q1
+
+                q4 = QueryTree(type="table", val=update_table, condition="", child=list())
+                if q3 is not None:
+                    q3.child.append(q4)
+                    q4.parent = q3
+                elif q2 is not None:
+                    q2.child.append(q4)
+                    q4.parent = q2
+                else:
+                    q1.child.append(q4)
+                    q4.parent = q1
 
         except Exception as e:
             raise Exception(f"Error parsing query: {str(e)}")

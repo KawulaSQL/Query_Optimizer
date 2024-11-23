@@ -105,7 +105,6 @@ def extract_joins(query):
     return result
 
 
-
 def extract_on_conditions(query):
     on_condition_pattern = r'\bON\s+([^;]+?)\s*(?=\b(JOIN|WHERE|GROUP BY|ORDER BY|LIMIT|$))'
 
@@ -113,4 +112,33 @@ def extract_on_conditions(query):
     on_conditions = [match[0].strip() for match in matches]
 
     return on_conditions
+
+
+def extract_set_conditions(query):
+    set_pattern = r"SET\s+(.+?)\s+WHERE"
+    match = re.search(set_pattern, query, re.IGNORECASE)
+
+    if not match:
+        return []
+
+    set_clause = match.group(1).strip()
+    conditions = [condition.strip() for condition in set_clause.split(',')]
+
+    return conditions
+
+
+def extract_table_update(query):
+    query = query.strip()
+
+    if not query.upper().startswith("UPDATE "):
+        raise Exception("Query does not start with UPDATE.")
+
+    match = re.match(r'^\s*UPDATE\s+(.*?)\s+SET\s', query, re.IGNORECASE)
+    if not match:
+        raise Exception("Could not find columns in UPDATE clause.")
+
+    columns_part = match.group(1).strip()
+
+    return columns_part
+
 
