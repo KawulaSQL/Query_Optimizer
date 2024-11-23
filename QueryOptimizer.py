@@ -1,9 +1,8 @@
 from helper.get_object import get_limit, get_column_from_order_by, get_column_from_group_by, get_condition_from_where, \
     get_columns_from_select, get_from_table
+from helper.get_stats import get_stats
 from helper.validation import validate_query
 from model.models import ParsedQuery, QueryTree
-from typing import Dict, Any
-
 
 class QueryOptimizer:
     def __init__(self, query):
@@ -184,14 +183,13 @@ class QueryOptimizer:
                             node.val = child_node.val
         
     def get_cost(self, query: QueryTree) -> int:
-        stats = self.get_stats()
+        stats = get_stats()
 
         if query.type == "table":
             table_stats = stats.get(query.val)
             return table_stats["b_r"]
         
         if query.type == "sigma":
-            # Untuk sekarang asumsi linear search, gak ada index
             child_node = query.child[0]
             return self.get_cost(child_node)
 
@@ -200,11 +198,9 @@ class QueryOptimizer:
             return self.get_cost(child_node)
         
         if query.type == "join":
-            # Untuk sekarang asumsi nested-loop join
             left_node = query.child[0]
             right_node = query.child[1]
 
-            # Kalo table, + b(r). Kalo bukan, gausah.
             if left_node.type == "table":
                 left_stats = stats.get(left_node.val)
                 right_stats = stats.get(right_node.val)
@@ -212,39 +208,8 @@ class QueryOptimizer:
                 join_cost = left_stats["n_r"] * right_stats["b_r"] + left_stats["b_r"]
                 return join_cost
             else:
-                join_cost = 0 # Belom
+                join_cost = 0
                 return 0
-    
-    def get_stats(self) -> Dict[str, Dict[str, Any]]:
-        """
-        Returns statistical data for two tables with specified attributes and a one-to-many relationship.
-        """
-        stats = {
-            "movies": {
-                "n_r": 1000,               # Total number of movies (tuples)
-                "b_r": 60,                 # Total number of storage blocks
-                "l_r": 512,                # Size of a single movie record (in bytes)
-                "f_r": 16,                 # Blocking factor (movies per block)
-                "v_a_r": {                 # Distinct values for attributes
-                    "movie_id": 1000,      # Each movie has a unique ID
-                    "title": 980,          # Number of unique movie titles (some may repeat)
-                    "genre": 15            # Number of distinct genres
-                }
-            },
-            "reviews": {
-                "n_r": 5000,               # Total number of reviews (tuples)
-                "b_r": 100,                # Total number of storage blocks
-                "l_r": 256,                # Size of a single review record (in bytes)
-                "f_r": 50,                 # Blocking factor (reviews per block)
-                "v_a_r": {                 # Distinct values for attributes
-                    "review_id": 5000,     # Each review has a unique ID
-                    "movie_id": 1000,      # Matches the number of movies in the movies table
-                    "rating": 10,          # Ratings are distinct values (e.g., 1-10)
-                    "description": 4500    # Number of unique review descriptions
-                }
-            }
-        }
-        return stats
 
     def print_query_tree(self, node, depth=0):
         if node is None:
@@ -289,9 +254,7 @@ q_t3 = QueryTree(type="table", val="movies", condition="", child=list(), parent=
 q_s3.child.append(q_t3)
 
 """
-SELECT title, rating, description 
-FROM movies m JOIN reviews r ON m.movie_id = r.review_id
-WHERE genre = 'Horror'
+SELECT title, rating, description FROM movies m JOIN reviews r ON m.movie_id = r.review_id WHERE genre = 'Horror'
 """
 # Projection node (select specific columns to return)
 q_p4 = QueryTree(type="project", val="A", condition="title, rating, description", child=list())
@@ -312,9 +275,15 @@ q_s4.child.append(q_j4)  # Selection's child is the join node
 q_j4.child.append(q_t4_movies)  # Join's first child is the movies table
 q_j4.child.append(q_t4_reviews)  # Join's second child is the reviews table
 
-test = QueryOptimizer("SELECT nama, alamat FROM mahasiswa WHERE nama = 'budi' AND kontak = 'anu' LIMIT 10;")
+# long_query = "SELECT m.title, r.rating, a.name AS actor_name, d.name AS director_name, aw.category FROM movies m JOIN reviews r ON m.movie_id = r.movie_id JOIN movie_actors ma ON m.movie_id = ma.movie_id JOIN actors a ON ma.actor_id = a.actor_id JOIN movie_directors md ON m.movie_id = md.movie_id JOIN directors d ON md.director_id = d.director_id LEFT JOIN awards aw ON m.movie_id = aw.movie_id WHERE r.rating > 8 AND a.name LIKE 'John%';"
 
-test.print_query_tree(test.parse().query_tree)
-print(f"Cost: {test.get_cost(q_p4)}")
+test = QueryOptimizer("SELECT movie_id, title, genre FROM movies WHERE title = 'Insidious' AND genre = 'Horror';")
 
-print(test.parse())
+parse_query = test.parse()
+
+test.print_query_tree(parse_query.query_tree)
+print(parse_query.query_tree)
+# print(f"Cost: {test.get_cost(q_p4)}")
+
+# print(test.parse())
+# print(test.print_query_tree(test.parse().query_tree))
