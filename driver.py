@@ -27,7 +27,7 @@ q_t3 = QueryTree(type="table", val="movies", condition="", child=list(), parent=
 q_s3.child.append(q_t3)
 
 """
-SELECT title, rating, description FROM movies m JOIN reviews r ON m.movie_id = r.review_id WHERE genre = 'Horror'
+SELECT title, rating, description FROM movies JOIN review ON movies.movie_id = reviews.movie_id WHERE genre = 'Horror'
 """
 q_p4 = QueryTree(type="project", val="A", condition="title, rating, description", child=list())
 q_s4 = QueryTree(type="sigma", val="B", condition="genre = 'Horror'", child=list(), parent=q_p4)
@@ -42,13 +42,36 @@ q_j4.child.append(q_t4_reviews)  # Join's second child is the reviews table
 
 # long_query = "SELECT m.title, r.rating, a.name AS actor_name, d.name AS director_name, aw.category FROM movies m JOIN reviews r ON m.movie_id = r.movie_id JOIN movie_actors ma ON m.movie_id = ma.movie_id JOIN actors a ON ma.actor_id = a.actor_id JOIN movie_directors md ON m.movie_id = md.movie_id JOIN directors d ON md.director_id = d.director_id LEFT JOIN awards aw ON m.movie_id = aw.movie_id WHERE r.rating > 8 AND a.name LIKE 'John%';"
 
-test = QueryOptimizer("SELECT movie_id, title, genre FROM movies WHERE title = 'Insidious' AND genre = 'Horror';")
+"""
+SELECT title, rating, award_name FROM movies
+JOIN reviews ON movies.movie_id = reviews.movie_id JOIN awards ON movies.movie_id = awards.award_id 
+WHERE genre = 'Horror' AND award_name = 'Scariest Movie';
+"""
+# Projection node: Selecting columns to return
+q_p5 = QueryTree(type="project", val="A", condition="title, rating, award_name", child=[])
+q_s2_5 = QueryTree(type="sigma", val="D", condition="award_name = 'Scariest Movie'", child=[], parent=q_p5)
+q_j2_5 = QueryTree(type="join", val="C", condition="movies.movie_id = awards.movie_id", child=[], parent=q_s2_5)
+q_j1_5 = QueryTree(type="join", val="B", condition="movies.movie_id = reviews.movie_id", child=[], parent=q_j2_5)
+q_s1_5 = QueryTree(type="sigma", val="E", condition="genre = 'horror' ", child=[], parent=q_j1_5)
 
-parse_query = test.parse()
+# Table nodes: Base tables
+q_t5_movies = QueryTree(type="table", val="movies", condition="", child=[], parent=q_s1_5)
+q_t5_reviews = QueryTree(type="table", val="reviews", condition="", child=[], parent=q_j1_5)
+q_t5_awards = QueryTree(type="table", val="awards", condition="", child=[], parent=q_j2_5)
 
-test.print_query_tree(q_p4)
-print(test.get_cost(q_p4))
-# print(f"Cost: {test.get_cost(q_p4)}")
+# Build the tree
+q_p5.child.append(q_s2_5)             # Projection -> Second Join
+q_s2_5.child.append(q_j2_5)      # Selection on award_name -> Awards table
+q_j2_5.child.append(q_j1_5)           # Second Join -> First Join
+q_j2_5.child.append(q_t5_awards)           # Second Join -> Selection on award_name
+q_j1_5.child.append(q_s1_5)           # First Join -> Selection on genre
+q_j1_5.child.append(q_t5_reviews)     # First Join -> Reviews table
+q_s1_5.child.append(q_t5_movies)      # Selection on genre -> Movies table
 
-# print(test.parse())
-# print(test.print_query_tree(test.parse().query_tree))
+test = QueryOptimizer(";")
+
+# parse_query = test.parse()
+
+test.print_query_tree(q_p5)
+print(test.get_cost(q_p5))
+print(q_p5)

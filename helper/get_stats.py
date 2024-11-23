@@ -13,7 +13,8 @@ def get_stats() -> Dict[str, Dict[str, Any]]:
             "v_a_r": {                 # Distinct values for attributes
                 "movie_id": 1000,      # Each movie has a unique ID
                 "title": 980,          # Number of unique movie titles (some may repeat)
-                "genre": 15            # Number of distinct genres
+                "genre": 15,           # Number of distinct genres
+                "age_rating": 4
             }
         },
         "reviews": {
@@ -55,8 +56,8 @@ def get_stats() -> Dict[str, Dict[str, Any]]:
             "f_r": 20,
             "v_a_r": {
                 "award_id": 500,
+                "award_name": 450,
                 "movie_id": 1000,      # Matches the number of movies (FK relationship)
-                "category": 50
             }
         },
         "movie_actors": {              # Linking table for movies and actors

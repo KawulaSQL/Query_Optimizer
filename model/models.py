@@ -11,6 +11,7 @@ class QueryTree:
     parent: Optional['QueryTree'] = None
     total_block: int = 0
     total_row: int = 0
+    columns: List[str] = field(default_factory=list)
 
 
 @dataclass

@@ -181,35 +181,105 @@ class QueryOptimizer:
                             node.type = child_node.type
                             node.condition = child_node.condition
                             node.val = child_node.val
-        
-    def get_cost(self, query: QueryTree) -> int:
+            
+    def get_cost(self, qt: QueryTree) -> int:
         stats = get_stats()
 
-        if query.type == "table":
-            table_stats = stats.get(query.val)
-            return table_stats["b_r"]
-        
-        if query.type == "sigma":
-            child_node = query.child[0]
-            return self.get_cost(child_node)
+        if qt.type == "table":
+            table_stats = stats.get(qt.val)
+            if not table_stats:
+                raise ValueError(f"Table '{qt.val}' not found in stats.")
+            
+            qt.total_row = table_stats["n_r"]
+            qt.total_block = table_stats["b_r"]
+            qt.columns = [f"{qt.val}.{col}" for col in stats[qt.val]["v_a_r"].keys()]
 
-        if query.type == "project":
-            child_node = query.child[0]
-            return self.get_cost(child_node)
-        
-        if query.type == "join":
-            left_node = query.child[0]
-            right_node = query.child[1]
+            return qt.total_block
 
-            if left_node.type == "table":
-                left_stats = stats.get(left_node.val)
-                right_stats = stats.get(right_node.val)
+        # todo handle range based condition
+        if qt.type == "sigma":
+            child_node = qt.child[0]
+            child_cost = self.get_cost(child_node)
 
-                join_cost = left_stats["n_r"] * right_stats["b_r"] + left_stats["b_r"]
-                return join_cost
-            else:
-                join_cost = 0
-                return 0
+            qt.columns = child_node.columns
+
+            conditions = [cond.strip() for cond in qt.condition.lower().split(" or ")]
+
+            qt.total_row = 0
+
+            for condition in conditions:
+                condition_column = condition.split("=")[0].strip()
+
+                if "." not in condition_column:
+                    matching_columns = [col for col in child_node.columns if col.split(".")[1] == condition_column]
+                    
+                    if len(matching_columns) == 0:
+                        raise ValueError(f"Column '{condition_column}' not found in the child's columns: {child_node.columns}")
+                    elif len(matching_columns) > 1:
+                        raise ValueError(f"Ambiguous column name '{condition_column}': matches {matching_columns}")
+                    else:
+                        condition_column = matching_columns[0]
+
+                table_name, column_name = condition_column.split(".")
+                
+                if table_name not in stats or column_name not in stats[table_name]["v_a_r"]:
+                    raise ValueError(f"Column '{condition_column}' not found in stats.")
+                
+                distinct_values = stats[table_name]["v_a_r"][column_name]
+
+                qt.total_row += round((child_node.total_row - qt.total_row) / distinct_values)
+
+            return child_cost
+
+        if qt.type == "project":
+            child_node = qt.child[0]
+            child_cost = self.get_cost(child_node)
+
+            projection_columns = [col.strip() for col in qt.condition.split(",")]
+
+            validated_columns = []
+
+            for column in projection_columns:
+                if "." in column:
+                    if column not in child_node.columns:
+                        raise ValueError(f"Column '{column}' is not present in the child's columns: {child_node.columns}")
+                    validated_columns.append(column)
+                else:
+                    matching_columns = [col for col in child_node.columns if col.split(".")[1] == column]
+                    
+                    if len(matching_columns) == 0:
+                        raise ValueError(f"Column '{column}' is not found in the child's columns: {child_node.columns}")
+                    elif len(matching_columns) > 1:
+                        raise ValueError(f"Ambiguous column name '{column}': matches {matching_columns}")
+                    else:
+                        validated_columns.append(matching_columns[0])
+
+            qt.columns = validated_columns
+
+            return child_cost
+
+        # todo validate join condition
+        if qt.type == "join":
+            left_node = qt.child[0]
+            right_node = qt.child[1]
+
+            left_node_cost = self.get_cost(left_node)
+
+            if right_node.type == "table":
+                table_stats = stats.get(right_node.val)
+                if not table_stats:
+                    raise ValueError(f"Table '{right_node.val}' not found in stats.")
+                
+                right_node.total_row = table_stats["n_r"]
+                right_node.total_block = table_stats["b_r"]
+                right_node.columns = [f"{right_node.val}.{col}" for col in stats[right_node.val]["v_a_r"].keys()]
+
+            # todo determine total row by fk
+            qt.columns = list(set(left_node.columns) | set(right_node.columns))
+            qt.total_row = max(right_node.total_row, left_node.total_row)
+            join_cost = left_node_cost + left_node.total_row * right_node.total_block
+            
+            return join_cost
 
     def print_query_tree(self, node, depth=0):
         if node is None:
