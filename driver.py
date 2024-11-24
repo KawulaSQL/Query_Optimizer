@@ -72,6 +72,12 @@ test = QueryOptimizer(";")
 
 # parse_query = test.parse()
 
-test.print_query_tree(q_p5)
+# test.print_query_tree(q_p5)
 print(test.get_cost(q_p5))
 print(q_p5)
+print(test.optimize(q_p5))
+
+print("------- OPTIMIZER -------")
+optimizer = QueryOptimizer(";")
+optimized_tree = optimizer.optimize(q_p5)
+optimizer.print_query_tree(optimized_tree)
