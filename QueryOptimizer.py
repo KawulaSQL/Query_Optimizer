@@ -425,8 +425,7 @@ class QueryOptimizer:
 
             return child_cost
 
-        # todo validate join condition
-        if qt.type == "join":
+        if qt.type == "join" or qt.type == "natural join":
             left_node = qt.child[0]
             right_node = qt.child[1]
 
@@ -441,6 +440,19 @@ class QueryOptimizer:
                 right_node.total_block = table_stats["b_r"]
                 right_node.columns = [f"{right_node.val}.{col}" for col in stats[right_node.val]["v_a_r"].keys()]
 
+            try:
+                condition_parts = qt.condition.split("=")
+                left_attr = condition_parts[0].strip()
+                right_attr = condition_parts[1].strip()
+            except (IndexError, AttributeError):
+                raise ValueError(f"Invalid join condition: '{qt.condition}'. Expected format 'a.attr1 = b.attr2' or similar.")
+
+            combined_columns = set(left_node.columns) | set(right_node.columns)
+            if left_attr not in combined_columns or right_attr not in combined_columns:
+                raise ValueError(
+                    f"Invalid join condition: '{qt.condition}'. Columns must exist in the combined set of relations."
+                )
+
             # todo determine total row by fk
             qt.columns = list(set(left_node.columns) | set(right_node.columns))
             qt.total_row = max(right_node.total_row, left_node.total_row)
@@ -451,17 +463,9 @@ class QueryOptimizer:
     def print_query_tree(self, node, depth=0):
         if node is None:
             return
-        
+
         indent = "--" * depth + "> "
-        if node.type == "project":
-            print(f"{indent}project {node.condition}")
-        elif node.type == "sigma":
-            print(f"{indent}sigma {node.condition}")
-        elif node.type == "join":
-            print(f"{indent}join {node.condition}")
-        elif node.type == "table":
-            print(f"{indent}table {node.val}")
+        print(f"{indent}{node.type}, {node.condition}, {node.val}".strip())
         
         for child in node.child:
             self.print_query_tree(child, depth + 1)
-
