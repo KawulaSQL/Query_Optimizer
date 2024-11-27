@@ -318,32 +318,32 @@ class QueryOptimizer:
                             current_node.val = child_node.val
                             current_node.child = child_node.child
             
-            elif current_node.type == "project":
-                child_node = current_node.child[0]
-                child_cost = self.get_cost(child_node)
+            # elif current_node.type == "project":
+            #     child_node = current_node.child[0]
+            #     child_cost = self.get_cost(child_node)
 
-                if child_node.type == "project":
-                    current_node = child_node
+            #     if child_node.type == "project":
+            #         current_node = child_node
 
-            elif current_node.type == "join":
-                left_node = current_node.child[0]
-                right_node = current_node.child[1]
+            # elif current_node.type == "join":
+            #     left_node = current_node.child[0]
+            #     right_node = current_node.child[1]
 
-                if left_node.type == "join":
-                    current_node.child = [left_node.child[0], left_node.child[1], right_node]
-                    left_node = current_node.child[0]
-                    right_node = current_node.child[1]
+            #     if left_node.type == "join":
+            #         current_node.child = [left_node.child[0], left_node.child[1], right_node]
+            #         left_node = current_node.child[0]
+            #         right_node = current_node.child[1]
 
-                if current_node.condition:
-                    new_sigma = QueryTree(
-                        type="sigma",
-                        val=f"{current_node.val}_selection",
-                        condition=current_node.condition,
-                        child=[current_node],
-                        parent=current_node,
-                    )
-                    current_node.parent = new_sigma
-                    current_node = new_sigma
+            #     if current_node.condition:
+            #         new_sigma = QueryTree(
+            #             type="sigma",
+            #             val=f"{current_node.val}_selection",
+            #             condition=current_node.condition,
+            #             child=[current_node],
+            #             parent=current_node,
+            #         )
+            #         current_node.parent = new_sigma
+            #         current_node = new_sigma
             
                             
             nodes_to_process.extend(current_node.child)
@@ -426,8 +426,7 @@ class QueryOptimizer:
 
             return child_cost
 
-        # todo validate join condition
-        if qt.type == "join":
+        if qt.type == "join" or qt.type == "natural join":
             left_node = qt.child[0]
             right_node = qt.child[1]
 
@@ -441,6 +440,19 @@ class QueryOptimizer:
                 right_node.total_row = table_stats["n_r"]
                 right_node.total_block = table_stats["b_r"]
                 right_node.columns = [f"{right_node.val}.{col}" for col in stats[right_node.val]["v_a_r"].keys()]
+
+            try:
+                condition_parts = qt.condition.split("=")
+                left_attr = condition_parts[0].strip()
+                right_attr = condition_parts[1].strip()
+            except (IndexError, AttributeError):
+                raise ValueError(f"Invalid join condition: '{qt.condition}'. Expected format 'a.attr1 = b.attr2' or similar.")
+
+            combined_columns = set(left_node.columns) | set(right_node.columns)
+            if left_attr not in combined_columns or right_attr not in combined_columns:
+                raise ValueError(
+                    f"Invalid join condition: '{qt.condition}'. Columns must exist in the combined set of relations."
+                )
 
             # todo determine total row by fk
             qt.columns = list(set(left_node.columns) | set(right_node.columns))
@@ -505,17 +517,9 @@ class QueryOptimizer:
     def print_query_tree(self, node, depth=0):
         if node is None:
             return
-        
+
         indent = "--" * depth + "> "
-        if node.type == "project":
-            print(f"{indent}project {node.condition}")
-        elif node.type == "sigma":
-            print(f"{indent}sigma {node.condition}")
-        elif node.type == "join":
-            print(f"{indent}join {node.condition}")
-        elif node.type == "table":
-            print(f"{indent}table {node.val}")
+        print(f"{indent}{node.type}, {node.condition}, {node.val}".strip())
         
         for child in node.child:
             self.print_query_tree(child, depth + 1)
-
