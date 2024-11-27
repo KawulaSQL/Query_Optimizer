@@ -317,32 +317,32 @@ class QueryOptimizer:
                             current_node.val = child_node.val
                             current_node.child = child_node.child
             
-            elif current_node.type == "project":
-                child_node = current_node.child[0]
-                child_cost = self.get_cost(child_node)
+            # elif current_node.type == "project":
+            #     child_node = current_node.child[0]
+            #     child_cost = self.get_cost(child_node)
 
-                if child_node.type == "project":
-                    current_node = child_node
+            #     if child_node.type == "project":
+            #         current_node = child_node
 
-            elif current_node.type == "join":
-                left_node = current_node.child[0]
-                right_node = current_node.child[1]
+            # elif current_node.type == "join":
+            #     left_node = current_node.child[0]
+            #     right_node = current_node.child[1]
 
-                if left_node.type == "join":
-                    current_node.child = [left_node.child[0], left_node.child[1], right_node]
-                    left_node = current_node.child[0]
-                    right_node = current_node.child[1]
+            #     if left_node.type == "join":
+            #         current_node.child = [left_node.child[0], left_node.child[1], right_node]
+            #         left_node = current_node.child[0]
+            #         right_node = current_node.child[1]
 
-                if current_node.condition:
-                    new_sigma = QueryTree(
-                        type="sigma",
-                        val=f"{current_node.val}_selection",
-                        condition=current_node.condition,
-                        child=[current_node],
-                        parent=current_node,
-                    )
-                    current_node.parent = new_sigma
-                    current_node = new_sigma
+            #     if current_node.condition:
+            #         new_sigma = QueryTree(
+            #             type="sigma",
+            #             val=f"{current_node.val}_selection",
+            #             condition=current_node.condition,
+            #             child=[current_node],
+            #             parent=current_node,
+            #         )
+            #         current_node.parent = new_sigma
+            #         current_node = new_sigma
             
                             
             nodes_to_process.extend(current_node.child)
