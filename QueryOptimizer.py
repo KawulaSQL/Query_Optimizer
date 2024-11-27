@@ -3,6 +3,7 @@ from helper.get_object import get_limit, get_column_from_order_by, get_column_fr
 from helper.get_stats import get_stats
 from helper.validation import validate_query
 from model.models import ParsedQuery, QueryTree
+import math
 
 
 class QueryOptimizer:
@@ -447,6 +448,59 @@ class QueryOptimizer:
             join_cost = left_node_cost + left_node.total_row * right_node.total_block
             
             return join_cost
+        
+        if qt.type == "limit":
+            child_node = qt.child[0]
+            child_cost = self.get_cost(child_node)
+            
+            return child_cost + 1
+        
+        if qt.type == "sort":
+            child_node = qt.child[0]
+            child_cost = self.get_cost(child_node)
+            
+            block_size = stats[child_node.val]["f_r"]
+            total_rows = child_node.total_row
+
+            num_blocks = (total_rows + block_size - 1) // block_size
+
+            initial_pass_cost = num_blocks * 2
+
+            b_b = 3
+            merge_passes = math.ceil(math.log(num_blocks / b_b, 2)) if num_blocks > b_b else 0
+
+            merge_cost = merge_passes * num_blocks
+
+            sort_cost = initial_pass_cost + merge_cost
+
+            return child_cost + sort_cost
+        
+        if qt.type == "update":
+            child_node = qt.child[0]
+            child_cost = self.get_cost(child_node)
+            
+            set_columns = [col.strip() for col in qt.condition.split(",")]
+            validated_columns = []
+            
+            for column in set_columns:
+                if "." in column:
+                    if column not in child_node.columns:
+                        raise ValueError(f"Column '{column}' is not present in the child's columns: {child_node.columns}")
+                    validated_columns.append(column)
+                else:
+                    matching_columns = [col for col in child_node.columns if col.split(".")[1] == column]
+                    
+                    if len(matching_columns) == 0:
+                        raise ValueError(f"Column '{column}' is not found in the child's columns: {child_node.columns}")
+                    elif len(matching_columns) > 1:
+                        raise ValueError(f"Ambiguous column name '{column}': matches {matching_columns}")
+                    else:
+                        validated_columns.append(matching_columns[0])
+            
+            qt.columns = validated_columns
+            
+            update_cost = child_node.total_row
+            return child_cost + update_cost
 
     def print_query_tree(self, node, depth=0):
         if node is None:
