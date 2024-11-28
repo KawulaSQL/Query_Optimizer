@@ -173,12 +173,12 @@ class QueryOptimizer:
                     else:
                         self.parse_result.query_tree = q7
 
-                elif self.query.upper().find("NATURAL JOIN") != -1:
+                elif self.query.upper().find("JOIN") != -1:
                     join = get_from_table(self.query)
                     join_split = join.split(" JOIN ")
                     join_table1 = join_split[0]
                     join_table2 = join_split[1].split(" ON ")[0]
-                    join_condition = join_split[1]
+                    join_condition = join_split[1].split(" ON ")[1]
                     q7 = QueryTree(type="join", val=val, condition=join_condition, child=list())
 
                     q8 = QueryTree(type="table", val=join_table1, condition="", child=list(), parent=q7)
@@ -441,18 +441,19 @@ class QueryOptimizer:
                 right_node.total_block = table_stats["b_r"]
                 right_node.columns = [f"{right_node.val}.{col}" for col in stats[right_node.val]["v_a_r"].keys()]
 
-            try:
-                condition_parts = qt.condition.split("=")
-                left_attr = condition_parts[0].strip()
-                right_attr = condition_parts[1].strip()
-            except (IndexError, AttributeError):
-                raise ValueError(f"Invalid join condition: '{qt.condition}'. Expected format 'a.attr1 = b.attr2' or similar.")
+            if qt.type == "join":
+                try:
+                    condition_parts = qt.condition.split("=")
+                    left_attr = condition_parts[0].strip()
+                    right_attr = condition_parts[1].strip()
+                except (IndexError, AttributeError):
+                    raise ValueError(f"Invalid join condition: '{qt.condition}'. Expected format 'a.attr1 = b.attr2' or similar.")
 
-            combined_columns = set(left_node.columns) | set(right_node.columns)
-            if left_attr not in combined_columns or right_attr not in combined_columns:
-                raise ValueError(
-                    f"Invalid join condition: '{qt.condition}'. Columns must exist in the combined set of relations."
-                )
+                combined_columns = set(left_node.columns) | set(right_node.columns)
+                if left_attr not in combined_columns or right_attr not in combined_columns:
+                    raise ValueError(
+                        f"Invalid join condition: '{qt.condition}'. Columns must exist in the combined set of relations."
+                    )
 
             # todo determine total row by fk
             qt.columns = list(set(left_node.columns) | set(right_node.columns))
