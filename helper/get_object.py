@@ -60,6 +60,16 @@ def get_column_from_order_by(query):
 
     return column
 
+def get_operator_operands_from_condition(condition):
+    allowed_operators = ["<=", ">=", "<>", "<", ">", "="]
+    for operator in allowed_operators:
+        if operator in condition:
+            left_operand, right_operand = map(str.strip, condition.split(operator, 1))
+            return operator, left_operand, right_operand
+
+    raise ValueError(
+        f"Invalid condition '{condition}'. Allowed operators are: {', '.join(allowed_operators)}"
+    )
 
 def get_limit(query):
     query = query.strip()

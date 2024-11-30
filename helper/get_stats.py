@@ -13,7 +13,7 @@ def get_stats() -> Dict[str, Dict[str, Any]]:
             "v_a_r": {                 # Distinct values for attributes
                 "movie_id": 1000,      # Each movie has a unique ID
                 "title": 980,          # Number of unique movie titles (some may repeat)
-                "genre": 15,           # Number of distinct genres
+                "genre": 20,           # Number of distinct genres
                 "age_rating": 4
             }
         },

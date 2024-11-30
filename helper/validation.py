@@ -73,3 +73,7 @@ def validate_columns(query_columns):
     )
 
     return pattern.match(query_columns) is not None
+
+def validate_string(value):
+    pattern = re.compile(r"^(\"[^\"]*\"|'[^']*')$")
+    return pattern.match(value) is not None

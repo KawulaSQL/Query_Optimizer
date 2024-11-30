@@ -1,7 +1,7 @@
 from helper.get_object import get_limit, get_column_from_order_by, get_column_from_group_by, get_condition_from_where, \
-    get_columns_from_select, get_from_table, extract_set_conditions, extract_table_update
+    get_columns_from_select, get_from_table, extract_set_conditions, extract_table_update, get_operator_operands_from_condition
 from helper.get_stats import get_stats
-from helper.validation import validate_query
+from helper.validation import validate_query, validate_string
 from model.models import ParsedQuery, QueryTree
 import math
 
@@ -380,26 +380,56 @@ class QueryOptimizer:
             qt.total_row = 0
 
             for condition in conditions:
-                condition_column = condition.split("=")[0].strip()
+                column_name = None
+                operator, left_operand, right_operand = get_operator_operands_from_condition(condition)
 
-                if "." not in condition_column:
-                    matching_columns = [col for col in child_node.columns if col.split(".")[1] == condition_column]
-                    
-                    if len(matching_columns) == 0:
-                        raise ValueError(f"Column '{condition_column}' not found in the child's columns: {child_node.columns}")
-                    elif len(matching_columns) > 1:
-                        raise ValueError(f"Ambiguous column name '{condition_column}': matches {matching_columns}")
+                if "." not in left_operand:
+                    if not left_operand.isnumeric() and not validate_string(left_operand):
+                        matching_columns = [col for col in child_node.columns if col.split(".")[1] == left_operand]
+                        if len(matching_columns) == 0:
+                            raise ValueError(f"Invalid left operand '{left_operand}'. Must be a number, a string in quotes, or an attribute.")
+                        elif len(matching_columns) > 1:
+                            raise ValueError(f"Ambiguous column name '{left_operand}': matches {matching_columns}")
+                        else:
+                            table_name, column_name = matching_columns[0].split(".")
+
+                if "." in left_operand:
+                    table_name, column_name = left_operand.split(".")
+                    if table_name not in stats or column_name not in stats[table_name]["v_a_r"]:
+                        raise ValueError(f"Column '{left_operand}' not found.")
+
+                if "." not in right_operand:
+                    if not right_operand.isnumeric() and not validate_string(right_operand):
+                        matching_columns = [col for col in child_node.columns if col.split(".")[1] == right_operand]
+                        if len(matching_columns) == 0:
+                            raise ValueError(f"Invalid right operand '{right_operand}'. Must be a number, a string in quotes, or an attribute.")
+                        elif len(matching_columns) > 1:
+                            raise ValueError(f"Ambiguous column name '{right_operand}': matches {matching_columns}")
+                        else:
+                            table_name, column_name = matching_columns[0].split(".")
+
+                if "." in right_operand:
+                    table_name, column_name = right_operand.split(".")
+                    if table_name not in stats or column_name not in stats[table_name]["v_a_r"]:
+                        raise ValueError(f"Column '{right_operand}' not found.")
+                
+                if column_name is not None:
+                    if operator == "=":
+                        distinct_values = stats[table_name]["v_a_r"].get(column_name, 1)
+                        qt.total_row += round((child_node.total_row - qt.total_row) / distinct_values)
+                    elif operator == "<>":
+                        distinct_values = stats[table_name]["v_a_r"].get(column_name, 1)
+                        qt.total_row += (child_node.total_row - qt.total_row) - round((child_node.total_row - qt.total_row) / distinct_values)
                     else:
-                        condition_column = matching_columns[0]
+                        qt.total_row += (child_node.total_row - qt.total_row) / 2
+                else:
+                    if (left_operand.isnumeric() and validate_string(right_operand)) or (validate_string(left_operand) and right_operand.isnumeric()):
+                        raise ValueError(f"Incompatible operand types: {left_operand} and {right_operand}.")
+                    if left_operand == right_operand:
+                        qt.total_row = child_node.total_row
 
-                table_name, column_name = condition_column.split(".")
-                
-                if table_name not in stats or column_name not in stats[table_name]["v_a_r"]:
-                    raise ValueError(f"Column '{condition_column}' not found in stats.")
-                
-                distinct_values = stats[table_name]["v_a_r"][column_name]
-
-                qt.total_row += round((child_node.total_row - qt.total_row) / distinct_values)
+                if qt.total_row == child_node.total_row:
+                    break
 
             return child_cost
 
