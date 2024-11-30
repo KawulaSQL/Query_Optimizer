@@ -68,10 +68,9 @@ q_j1_5.child.append(q_s1_5)           # First Join -> Selection on genre
 q_j1_5.child.append(q_t5_reviews)     # First Join -> Reviews table
 q_s1_5.child.append(q_t5_movies)      # Selection on genre -> Movies table
 
-test = QueryOptimizer("SELECT * FROM awards JOIN movies ON awards.movie_id = movies.movie_id;")
+test = QueryOptimizer("SELECT * FROM movies NATURAL JOIN awards;")
 
 parse_query = test.parse()
-print(parse_query)
 
 test.print_query_tree(parse_query.query_tree)
 print(test.get_cost(parse_query.query_tree))

@@ -349,7 +349,12 @@ class QueryOptimizer:
             nodes_to_process.extend(current_node.child)
             
         return query_tree
-          
+    
+    """
+    Get cost of a query plan by checking the cost of each node in the query tree. Also performs syntax validation on the query structure and 
+    makes sure that attributes that are referenced are valid. The function uses the get_stats function from the storage manager to help estimate
+    the cost of an operation.
+    """
     def get_cost(self, qt: QueryTree) -> int:
         stats = get_stats()
 
@@ -364,7 +369,6 @@ class QueryOptimizer:
 
             return qt.total_block
 
-        # todo handle range based condition
         if qt.type == "sigma":
             child_node = qt.child[0]
             child_cost = self.get_cost(child_node)
@@ -455,7 +459,6 @@ class QueryOptimizer:
                         f"Invalid join condition: '{qt.condition}'. Columns must exist in the combined set of relations."
                     )
 
-            # todo determine total row by fk
             qt.columns = list(set(left_node.columns) | set(right_node.columns))
             qt.total_row = max(right_node.total_row, left_node.total_row)
             join_cost = left_node_cost + left_node.total_row * right_node.total_block
