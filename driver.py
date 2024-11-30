@@ -68,7 +68,9 @@ q_j1_5.child.append(q_s1_5)           # First Join -> Selection on genre
 q_j1_5.child.append(q_t5_reviews)     # First Join -> Reviews table
 q_s1_5.child.append(q_t5_movies)      # Selection on genre -> Movies table
 
-test = QueryOptimizer("SELECT movies.movie_id FROM movies WHERE 'b' = 'a' or 'a' = age_rating or title >= 'cuki' or genre <> 'horror';")
+test = QueryOptimizer("SELECT * FROM movies WHERE 'b' = 'a' or 'a' = age_rating or title >= 'cuki' or genre <> 'horror' order by genre;")
+
+# test = QueryOptimizer("update movies set genre ='horror' where age_rating = '18+';")
 
 parse_query = test.parse()
 
