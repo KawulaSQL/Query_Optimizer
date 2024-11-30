@@ -1,5 +1,5 @@
 import re
-
+from helper.validation import validate_string
 
 def get_columns_from_select(query):
     query = query.strip()
@@ -70,6 +70,26 @@ def get_operator_operands_from_condition(condition):
     raise ValueError(
         f"Invalid condition '{condition}'. Allowed operators are: {', '.join(allowed_operators)}"
     )
+
+def get_table_column_from_operand(operand, columns, stats):
+    if operand.isnumeric() or validate_string(operand):
+        return None, None
+
+    if "." in operand:
+        table_name, column_name = operand.split(".")
+        if table_name not in stats or column_name not in stats[table_name]["v_a_r"]:
+            raise ValueError(f"Column '{operand}' not found.")
+        return table_name, column_name
+
+    matching_columns = [col for col in columns if col.split(".")[1] == operand]
+    if len(matching_columns) == 0:
+        raise ValueError(
+            f"Invalid operand '{operand}'. Must be a number, a string in quotes, or an attribute."
+        )
+    elif len(matching_columns) > 1:
+        raise ValueError(f"Ambiguous column name '{operand}': matches {matching_columns}")
+    else:
+        return matching_columns[0].split(".")
 
 def get_limit(query):
     query = query.strip()

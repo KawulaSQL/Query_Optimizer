@@ -1,5 +1,5 @@
 from helper.get_object import get_limit, get_column_from_order_by, get_column_from_group_by, get_condition_from_where, \
-    get_columns_from_select, get_from_table, extract_set_conditions, extract_table_update, get_operator_operands_from_condition
+    get_columns_from_select, get_from_table, extract_set_conditions, extract_table_update, get_operator_operands_from_condition, get_table_column_from_operand
 from helper.get_stats import get_stats
 from helper.validation import validate_query, validate_string
 from model.models import ParsedQuery, QueryTree
@@ -383,35 +383,9 @@ class QueryOptimizer:
                 column_name = None
                 operator, left_operand, right_operand = get_operator_operands_from_condition(condition)
 
-                if "." not in left_operand:
-                    if not left_operand.isnumeric() and not validate_string(left_operand):
-                        matching_columns = [col for col in child_node.columns if col.split(".")[1] == left_operand]
-                        if len(matching_columns) == 0:
-                            raise ValueError(f"Invalid left operand '{left_operand}'. Must be a number, a string in quotes, or an attribute.")
-                        elif len(matching_columns) > 1:
-                            raise ValueError(f"Ambiguous column name '{left_operand}': matches {matching_columns}")
-                        else:
-                            table_name, column_name = matching_columns[0].split(".")
-
-                if "." in left_operand:
-                    table_name, column_name = left_operand.split(".")
-                    if table_name not in stats or column_name not in stats[table_name]["v_a_r"]:
-                        raise ValueError(f"Column '{left_operand}' not found.")
-
-                if "." not in right_operand:
-                    if not right_operand.isnumeric() and not validate_string(right_operand):
-                        matching_columns = [col for col in child_node.columns if col.split(".")[1] == right_operand]
-                        if len(matching_columns) == 0:
-                            raise ValueError(f"Invalid right operand '{right_operand}'. Must be a number, a string in quotes, or an attribute.")
-                        elif len(matching_columns) > 1:
-                            raise ValueError(f"Ambiguous column name '{right_operand}': matches {matching_columns}")
-                        else:
-                            table_name, column_name = matching_columns[0].split(".")
-
-                if "." in right_operand:
-                    table_name, column_name = right_operand.split(".")
-                    if table_name not in stats or column_name not in stats[table_name]["v_a_r"]:
-                        raise ValueError(f"Column '{right_operand}' not found.")
+                table_name, column_name = get_table_column_from_operand(left_operand, child_node.columns, stats)
+                if column_name is None:
+                    table_name, column_name = get_table_column_from_operand(right_operand, child_node.columns, stats)
                 
                 if column_name is not None:
                     if operator == "=":
@@ -466,29 +440,28 @@ class QueryOptimizer:
 
             left_node_cost = self.get_cost(left_node)
 
-            if right_node.type == "table":
-                table_stats = stats.get(right_node.val)
-                if not table_stats:
-                    raise ValueError(f"Table '{right_node.val}' not found in stats.")
+            table_stats = stats.get(right_node.val)
+            if not table_stats:
+                raise ValueError(f"Table '{right_node.val}' not found in stats.")
+            
+            right_node.total_row = table_stats["n_r"]
+            right_node.total_block = table_stats["b_r"]
+            right_node.columns = [f"{right_node.val}.{col}" for col in stats[right_node.val]["v_a_r"].keys()]
+
+            combined_columns = set(left_node.columns) | set(right_node.columns)
+            conditions = [cond.strip() for cond in qt.condition.lower().split(" or ")]
+
+            for condition in conditions:
+                column_name = None
+                operator, left_operand, right_operand = get_operator_operands_from_condition(condition)
+
+                table_name, column_name = get_table_column_from_operand(left_operand, combined_columns, stats)
+                if column_name is None:
+                    table_name, column_name = get_table_column_from_operand(right_operand, combined_columns, stats)
                 
-                right_node.total_row = table_stats["n_r"]
-                right_node.total_block = table_stats["b_r"]
-                right_node.columns = [f"{right_node.val}.{col}" for col in stats[right_node.val]["v_a_r"].keys()]
-
-            if qt.type == "join":
-                try:
-                    condition_parts = qt.condition.split("=")
-                    left_attr = condition_parts[0].strip()
-                    right_attr = condition_parts[1].strip()
-                except (IndexError, AttributeError):
-                    raise ValueError(f"Invalid join condition: '{qt.condition}'. Expected format 'a.attr1 = b.attr2' or similar.")
-
-                combined_columns = set(left_node.columns) | set(right_node.columns)
-                if left_attr not in combined_columns or right_attr not in combined_columns:
-                    raise ValueError(
-                        f"Invalid join condition: '{qt.condition}'. Columns must exist in the combined set of relations."
-                    )
-
+                if column_name is None and (left_operand.isnumeric() and validate_string(right_operand)) or (validate_string(left_operand) and right_operand.isnumeric()):
+                        raise ValueError(f"Incompatible operand types: {left_operand} and {right_operand}.")
+                    
             qt.columns = list(set(left_node.columns) | set(right_node.columns))
             qt.total_row = max(right_node.total_row, left_node.total_row)
             join_cost = left_node_cost + left_node.total_row * right_node.total_block
