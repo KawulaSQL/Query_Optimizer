@@ -74,12 +74,12 @@ test = QueryOptimizer("SELECT * FROM movies WHERE 'b' = 'a' or 'a' = age_rating 
 
 parse_query = test.parse()
 
-test.print_query_tree(parse_query.query_tree)
-print(test.get_cost(parse_query.query_tree))
-print(parse_query.query_tree)
-# print(test.optimize(q_p5))
+# test.print_query_tree(parse_query.query_tree)
+# print(test.get_cost(parse_query.query_tree))
+# print(parse_query.query_tree)
+print(test.optimize(parse_query.query_tree))
 
 # print("------- OPTIMIZER -------")
-# # optimizer = QueryOptimizer(";")
-# optimized_tree = optimizer.optimize(q_p5)
+# optimizer = QueryOptimizer(";")
+# optimized_tree = optimizer.optimize_coba(q_p5)
 # optimizer.print_query_tree(optimized_tree)

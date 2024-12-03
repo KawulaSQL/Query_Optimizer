@@ -263,93 +263,184 @@ class QueryOptimizer:
 
         return self.parse_result
 
+    # def optimize(self, query_tree: QueryTree) -> QueryTree:
+    #     nodes_to_process = [query_tree]
+
+    #     while nodes_to_process:
+    #         current_node = nodes_to_process.pop()
+
+    #         if current_node.type == "sigma":
+    #             if len(current_node.child) == 1 and current_node.child[0].type in ["join", "table"]:
+    #                 child_node = current_node.child[0]
+
+    #                 if child_node.type == "join":
+    #                     conditions = current_node.condition.split(" AND ")
+    #                     left_conditions, right_conditions, other_conditions = [], [], []
+
+    #                     for condition in conditions:
+    #                         column = condition.split("=")[0].strip()
+
+                      
+    #                         if column.startswith(child_node.child[0].val + "."):
+    #                             left_conditions.append(condition)
+    #                         elif column.startswith(child_node.child[1].val + "."):
+    #                             right_conditions.append(condition)
+    #                         else:
+    #                             other_conditions.append(condition)
+
+    #                     if left_conditions:
+    #                         left_sigma = QueryTree(
+    #                             type="sigma",
+    #                             val=f"{current_node.val}_L",
+    #                             condition=" AND ".join(left_conditions),
+    #                             child=[child_node.child[0]],
+    #                             parent=child_node,
+    #                         )
+    #                         child_node.child[0].parent = left_sigma
+    #                         child_node.child[0] = left_sigma
+
+    #                     if right_conditions:
+    #                         right_sigma = QueryTree(
+    #                             type="sigma",
+    #                             val=f"{current_node.val}_R",
+    #                             condition=" AND ".join(right_conditions),
+    #                             child=[child_node.child[1]],
+    #                             parent=child_node,
+    #                         )
+    #                         child_node.child[1].parent = right_sigma
+    #                         child_node.child[1] = right_sigma
+
+    #                     if other_conditions:
+    #                         current_node.condition = " AND ".join(other_conditions)
+    #                     else:
+    #                         current_node.type = child_node.type
+    #                         current_node.condition = child_node.condition
+    #                         current_node.val = child_node.val
+    #                         current_node.child = child_node.child
+    #         nodes_to_process.extend(current_node.child)
+            
+    #     return query_tree
+    
     def optimize(self, query_tree: QueryTree) -> QueryTree:
         nodes_to_process = [query_tree]
 
         while nodes_to_process:
             current_node = nodes_to_process.pop()
 
-            if current_node.type == "sigma":
-                if len(current_node.child) == 1 and current_node.child[0].type in ["join", "table"]:
-                    child_node = current_node.child[0]
+            if query_tree.type == "sigma":
+                conditions = query_tree.condition.split(" AND ")
+                if len(conditions) > 1:
+                    new_sigma_nodes = []
+                    for condition in conditions:
+                        new_sigma = QueryTree(type="sigma", val=query_tree.val, condition=condition.strip(), child=[query_tree.child[0]])
+                        new_sigma_nodes.append(new_sigma)
 
-                    if child_node.type == "join":
-                        conditions = current_node.condition.split(" AND ")
-                        left_conditions, right_conditions, other_conditions = [], [], []
+                    if len(new_sigma_nodes) > 0:
+                        for j in range(1, len(new_sigma_nodes)):
+                            new_sigma_nodes[0].child.append(new_sigma_nodes[j])
+                            new_sigma_nodes[j].parent = new_sigma_nodes[0]
 
-                        for condition in conditions:
-                            column = condition.split("=")[0].strip()
+                        query_tree = new_sigma_nodes[0]
 
-                      
-                            if column.startswith(child_node.child[0].val + "."):
-                                left_conditions.append(condition)
-                            elif column.startswith(child_node.child[1].val + "."):
-                                right_conditions.append(condition)
-                            else:
-                                other_conditions.append(condition)
+                if len(query_tree.child) == 2 and query_tree.child[0].type == "join":
+                    join_node = query_tree.child[0]
+                    left_child = join_node.child[0]
+                    right_child = join_node.child[1]
 
-                        if left_conditions:
-                            left_sigma = QueryTree(
-                                type="sigma",
-                                val=f"{current_node.val}_L",
-                                condition=" AND ".join(left_conditions),
-                                child=[child_node.child[0]],
-                                parent=child_node,
+                    if all(attr in left_child.columns for attr in query_tree.condition.split()):
+                        new_join = QueryTree(
+                            type="join",
+                            val=join_node.val,
+                            condition=join_node.condition,
+                            child=[query_tree, right_child]
+                        )
+                        return new_join
+
+                    elif any(attr in left_child.columns for attr in query_tree.condition.split()) and \
+                        any(attr in right_child.columns for attr in query_tree.condition.split()):
+                        new_join = QueryTree(
+                            type="join",
+                            val=join_node.val,
+                            condition=join_node.condition,
+                            child=[QueryTree(type="sigma", val=query_tree.val, condition=query_tree.condition, child=[left_child]), right_child]
+                        )
+                        return new_join
+                
+                if len(query_tree.child) == 2 and (query_tree.child[0].type == "table" and query_tree.child[1].type == "table"):
+                    combined_condition = query_tree.condition
+                    left_table = query_tree.child[0]
+                    right_table = query_tree.child[1]
+
+                    join_node = QueryTree(type="join", val=query_tree.val, condition=combined_condition, child=[left_table, right_table])
+                    return join_node
+
+                elif len(query_tree.child) == 2 and (query_tree.child[0].type == "join" or query_tree.child[1].type == "join"):
+                    join_node = query_tree.child[0] if query_tree.child[0].type == "join" else query_tree.child[1]
+                    combined_condition = f"{query_tree.condition} AND {join_node.condition}"
+
+                    join_node.condition = combined_condition
+                    return join_node
+
+            if query_tree.type == "project": 
+                if query_tree.parent and query_tree.parent.type == "project":
+                    return query_tree.parent 
+
+                if len(query_tree.child) == 2 and query_tree.child[0].type == "join":
+                    join_node = query_tree.child[0]
+                    left_child = join_node.child[0]
+                    right_child = join_node.child[1]
+
+                    if all(attr in left_child.columns + right_child.columns for attr in join_node.condition.split()):
+                        new_join = QueryTree(
+                            type="join",
+                            val=join_node.val,
+                            condition=join_node.condition,
+                            child=[QueryTree(type="project", val=query_tree.val, child=[left_child]), right_child]
+                        )
+                        return new_join
+
+                    L3 = [attr for attr in left_child.columns if attr in join_node.condition]
+                    L4 = [attr for attr in right_child.columns if attr in join_node.condition]
+
+                    if L3 and L4:
+                        new_join = QueryTree(
+                            type="join",
+                            val=join_node.val,
+                            condition=join_node.condition,
+                            child=[
+                                QueryTree(type="project", val=query_tree.val, child=[left_child]),
+                                QueryTree(type="project", val=query_tree.val, child=[right_child])
+                            ]
+                        )
+                        return new_join
+
+            if query_tree.type == "join":
+                if len(query_tree.child) == 2:
+                    left_child = query_tree.child[0]
+                    right_child = query_tree.child[1]
+
+                    if left_child.type == "table" and right_child.type == "table":
+                        query_tree.child[0], query_tree.child[1] = right_child, left_child
+
+                    if left_child.type == "join" or right_child.type == "join":
+                        if left_child.type == "join":
+                            new_join = QueryTree(
+                                type="join",
+                                val=query_tree.val,
+                                condition=f"{left_child.condition} AND {query_tree.condition}",
+                                child=[left_child.child[0], right_child]
                             )
-                            child_node.child[0].parent = left_sigma
-                            child_node.child[0] = left_sigma
-
-                        if right_conditions:
-                            right_sigma = QueryTree(
-                                type="sigma",
-                                val=f"{current_node.val}_R",
-                                condition=" AND ".join(right_conditions),
-                                child=[child_node.child[1]],
-                                parent=child_node,
+                            return new_join
+                        elif right_child.type == "join":
+                            new_join = QueryTree(
+                                type="join",
+                                val=query_tree.val,
+                                condition=f"{query_tree.condition} AND {right_child.condition}",
+                                child=[left_child, right_child.child[1]]
                             )
-                            child_node.child[1].parent = right_sigma
-                            child_node.child[1] = right_sigma
-
-                        if other_conditions:
-                            current_node.condition = " AND ".join(other_conditions)
-                        else:
-                            current_node.type = child_node.type
-                            current_node.condition = child_node.condition
-                            current_node.val = child_node.val
-                            current_node.child = child_node.child
-            
-            # elif current_node.type == "project":
-            #     child_node = current_node.child[0]
-            #     child_cost = self.get_cost(child_node)
-
-            #     if child_node.type == "project":
-            #         current_node = child_node
-
-            # elif current_node.type == "join":
-            #     left_node = current_node.child[0]
-            #     right_node = current_node.child[1]
-
-            #     if left_node.type == "join":
-            #         current_node.child = [left_node.child[0], left_node.child[1], right_node]
-            #         left_node = current_node.child[0]
-            #         right_node = current_node.child[1]
-
-            #     if current_node.condition:
-            #         new_sigma = QueryTree(
-            #             type="sigma",
-            #             val=f"{current_node.val}_selection",
-            #             condition=current_node.condition,
-            #             child=[current_node],
-            #             parent=current_node,
-            #         )
-            #         current_node.parent = new_sigma
-            #         current_node = new_sigma
-            
-                            
-            nodes_to_process.extend(current_node.child)
-            
+                            return new_join
         return query_tree
-    
+
     """
     Get cost of a query plan by checking the cost of each node in the query tree. Also performs syntax validation on the query structure and 
     makes sure that attributes that are referenced are valid. The function uses the get_stats function from the storage manager to help estimate
