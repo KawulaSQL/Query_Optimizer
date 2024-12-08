@@ -9,9 +9,9 @@ def generate_query_plans(optimizer_instance, tree: QueryTree) -> List[QueryTree]
 
     plans = [tree]
     
-    if tree.type == "sigma":
+    if tree.type == ["sigma", "product"]:
         plans.extend(apply_selection_rules(optimizer_instance, tree))
-    elif tree.type in ["join", "natural join"]:
+    elif tree.type in ["join", "natural join", "theta join"]:
         plans.extend(apply_join_rules(optimizer_instance, tree))
     elif tree.type == "project":
         plans.extend(apply_projection_rules(optimizer_instance, tree))
@@ -54,6 +54,27 @@ def apply_selection_rules(optimizer_instance, tree: QueryTree) -> List[QueryTree
             ]
         )
         plans.append(swapped_tree)
+        
+    # Rule 4a
+    if len(tree.child) > 0 and tree.child[0].type == "product":
+        new_tree = QueryTree(
+            type="product",
+            val=tree.child[0].val,
+            condition=f"{tree.child[0].condition} AND {tree.condition}",
+            child=tree.child[0].child
+        )
+        plans.append(new_tree)
+        
+    # Rule 4b
+    if len(tree.child) > 0 and tree.child[0].type == "theta join":
+        join_node = tree.child[0]
+        new_tree = QueryTree(
+            type="theta join",
+            val=join_node.val,
+            condition=f"{join_node.condition} AND {tree.condition}",
+            child=join_node.child
+        )
+        plans.append(new_tree) 
     
     # Rule 7
     if len(tree.child) > 0 and tree.child[0].type == "join":
