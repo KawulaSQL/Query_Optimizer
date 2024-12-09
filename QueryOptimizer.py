@@ -171,7 +171,6 @@ class QueryOptimizer:
                     else:
                         self.parse_result.query_tree = q7
 
-
                 elif self.query.upper().find("JOIN") != -1:
                     join = get_from_table(self.query)
                     join_split = join.split(" JOIN ")
