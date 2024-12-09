@@ -137,18 +137,15 @@ class QueryOptimizer:
                 if self.query.upper().find("NATURAL JOIN") != -1:
                     join = get_from_table(self.query)
                     join_split = join.split(" NATURAL JOIN ")
+
                     join_table1 = join_split[0]
-                    join_table2 = join_split[1]
-                    q7 = QueryTree(type="natural join", val=val, condition="", child=list())
+                    q7 = QueryTree(type="table", val=join_table1, condition="", child=list())
 
-                    q8 = QueryTree(type="table", val=join_table1, condition="", child=list(), parent=q7)
-                    q9 = QueryTree(type="table", val=join_table2, condition="", child=list(), parent=q7)
-
-                    q7.child.append(q8)
-                    q7.child.append(q9)
-
-                    q8.parent = q7
-                    q9.parent = q7
+                    for join_table2 in join_split[1:]:
+                        new_natural_join = QueryTree(type="natural join", val=val, condition="", child=[q7, QueryTree(
+                            type="table", val=join_table2, condition="", child=list())])
+                        q7 = new_natural_join
+                        val = chr(ord(val) + 1)
 
                     if q6 is not None:
                         q6.child.append(q7)
@@ -174,22 +171,23 @@ class QueryOptimizer:
                     else:
                         self.parse_result.query_tree = q7
 
+
                 elif self.query.upper().find("JOIN") != -1:
                     join = get_from_table(self.query)
                     join_split = join.split(" JOIN ")
+
                     join_table1 = join_split[0]
-                    join_table2 = join_split[1].split(" ON ")[0]
-                    join_condition = join_split[1].split(" ON ")[1]
-                    q7 = QueryTree(type="join", val=val, condition=join_condition, child=list())
+                    q7 = QueryTree(type="table", val=join_table1, condition="", child=list())
 
-                    q8 = QueryTree(type="table", val=join_table1, condition="", child=list(), parent=q7)
-                    q9 = QueryTree(type="table", val=join_table2, condition="", child=list(), parent=q7)
+                    for join_part in join_split[1:]:
+                        join_table2 = join_part.split(" ON ")[0]
+                        join_condition = join_part.split(" ON ")[1]
 
-                    q7.child.append(q8)
-                    q7.child.append(q9)
-
-                    q8.parent = q7
-                    q9.parent = q7
+                        join_condition = join_condition.replace("(", "").replace(")", "")
+                        new_join = QueryTree(type="join", val=val, condition=join_condition, child=[q7, QueryTree(
+                            type="table", val=join_table2, condition="", child=list())])
+                        q7 = new_join
+                        val = chr(ord(val) + 1)
 
                     if q6 is not None:
                         q6.child.append(q7)
