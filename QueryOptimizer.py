@@ -528,8 +528,3 @@ class QueryOptimizer:
         
         for child in node.child:
             self.print_query_tree(child, depth + 1)
-
-
-test = QueryOptimizer("select * from movies natural join anu;")
-parse = test.parse()
-test.print_query_tree(parse.query_tree)
