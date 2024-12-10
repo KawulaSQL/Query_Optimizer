@@ -1,3 +1,5 @@
+import re
+
 from helper.get_object import get_limit, get_column_from_order_by, get_column_from_group_by, get_condition_from_where, \
     get_columns_from_select, get_from_table, extract_set_conditions, extract_table_update, get_operator_operands_from_condition, get_table_column_from_operand
 from helper.get_stats import get_stats
@@ -136,7 +138,7 @@ class QueryOptimizer:
 
                 if self.query.upper().find("NATURAL JOIN") != -1:
                     join = get_from_table(self.query)
-                    join_split = join.split(" NATURAL JOIN ")
+                    join_split = re.split(r'\s+natural join\s+', join, flags=re.IGNORECASE)
 
                     join_table1 = join_split[0]
                     q7 = QueryTree(type="table", val=join_table1, condition="", child=list())
@@ -173,14 +175,15 @@ class QueryOptimizer:
 
                 elif self.query.upper().find("JOIN") != -1:
                     join = get_from_table(self.query)
-                    join_split = join.split(" JOIN ")
+                    join_split = re.split(r'\s+join\s+', join, flags=re.IGNORECASE)
 
                     join_table1 = join_split[0]
                     q7 = QueryTree(type="table", val=join_table1, condition="", child=list())
 
                     for join_part in join_split[1:]:
-                        join_table2 = join_part.split(" ON ")[0]
-                        join_condition = join_part.split(" ON ")[1]
+                        temp = re.split(r'\s+on\s+', join_part, flags=re.IGNORECASE)
+                        join_table2 = temp[0]
+                        join_condition = temp[1]
 
                         join_condition = join_condition.replace("(", "").replace(")", "")
                         new_join = QueryTree(type="join", val=val, condition=join_condition, child=[q7, QueryTree(
@@ -518,3 +521,8 @@ class QueryOptimizer:
         
         for child in node.child:
             self.print_query_tree(child, depth + 1)
+
+
+test = QueryOptimizer("select * from movies natural join anu;")
+parse = test.parse()
+test.print_query_tree(parse.query_tree)
