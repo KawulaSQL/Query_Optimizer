@@ -5,10 +5,16 @@ from helper.validation import validate_query, validate_string
 from helper.optimizes import generate_query_plans
 from model.models import ParsedQuery, QueryTree
 import math
+import logging
+
+logging.basicConfig(level=logging.INFO)
+
+logger = logging.getLogger(__name__)
 
 
 class QueryOptimizer:
     def __init__(self, query):
+        self.logger = logging.getLogger(__name__)
         self.query = query
         self.parse_result: ParsedQuery = None
 
@@ -510,6 +516,7 @@ class QueryOptimizer:
             return child_cost + update_cost
 
     def print_query_tree(self, node, depth=0):
+        self.logger.info(f"{'  ' * depth}Node: {node.type}, Value: {node.val}, Condition: {node.condition}")
         if node is None:
             return
 
