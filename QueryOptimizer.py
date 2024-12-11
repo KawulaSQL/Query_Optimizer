@@ -15,9 +15,10 @@ logger = logging.getLogger(__name__)
 
 
 class QueryOptimizer:
-    def __init__(self, query):
+    def __init__(self, query, stats):
         self.logger = logging.getLogger(__name__)
         self.query = query
+        self.stats = stats
         self.parse_result: ParsedQuery = None
 
     """
@@ -351,8 +352,7 @@ class QueryOptimizer:
     the cost of an operation.
     """
     def get_cost(self, qt: QueryTree) -> int:
-        stats = get_stats()
-
+        stats = self.stats
         if qt.type == "table":
             table_stats = stats.get(qt.val)
             if not table_stats:
