@@ -153,6 +153,8 @@ class QueryOptimizer:
                         new_natural_join = QueryTree(type="natural join", val=val, condition="", child=[q7, QueryTree(
                             type="table", val=join_table2, condition="", child=list())])
                         q7 = new_natural_join
+                        q7.child[0].parent = q7
+                        q7.child[1].parent = q7
                         val = chr(ord(val) + 1)
 
                     if q6 is not None:
@@ -195,6 +197,8 @@ class QueryOptimizer:
                         new_join = QueryTree(type="join", val=val, condition=join_condition, child=[q7, QueryTree(
                             type="table", val=join_table2, condition="", child=list())])
                         q7 = new_join
+                        q7.child[0].parent = q7
+                        q7.child[1].parent = q7
                         val = chr(ord(val) + 1)
 
                     if q6 is not None:
@@ -269,81 +273,6 @@ class QueryOptimizer:
             raise Exception(f"Error parsing query: {str(e)}")
 
         return self.parse_result
-    
-    def optimize(self, parsed_query: ParsedQuery) -> ParsedQuery:
-        if parsed_query is None or parsed_query.query_tree is None:
-            return parsed_query
-
-        query_plans = generate_query_plans(self, parsed_query.query_tree)
-        
-        min_cost = float('inf')
-        best_plan = parsed_query.query_tree
-        
-        for plan in query_plans:
-            cost = self.get_cost(plan)
-            if cost < min_cost:
-                min_cost = cost
-                best_plan = plan
-                
-        return ParsedQuery(query=parsed_query.query, query_tree=best_plan)
-
-    # def optimize(self, query_tree: QueryTree) -> QueryTree:
-    #     nodes_to_process = [query_tree]
-
-    #     while nodes_to_process:
-    #         current_node = nodes_to_process.pop()
-
-    #         if current_node.type == "sigma":
-    #             if len(current_node.child) == 1 and current_node.child[0].type in ["join", "table"]:
-    #                 child_node = current_node.child[0]
-
-    #                 if child_node.type == "join":
-    #                     conditions = current_node.condition.split(" AND ")
-    #                     left_conditions, right_conditions, other_conditions = [], [], []
-
-    #                     for condition in conditions:
-    #                         column = condition.split("=")[0].strip()
-
-                      
-    #                         if column.startswith(child_node.child[0].val + "."):
-    #                             left_conditions.append(condition)
-    #                         elif column.startswith(child_node.child[1].val + "."):
-    #                             right_conditions.append(condition)
-    #                         else:
-    #                             other_conditions.append(condition)
-
-    #                     if left_conditions:
-    #                         left_sigma = QueryTree(
-    #                             type="sigma",
-    #                             val=f"{current_node.val}_L",
-    #                             condition=" AND ".join(left_conditions),
-    #                             child=[child_node.child[0]],
-    #                             parent=child_node,
-    #                         )
-    #                         child_node.child[0].parent = left_sigma
-    #                         child_node.child[0] = left_sigma
-
-    #                     if right_conditions:
-    #                         right_sigma = QueryTree(
-    #                             type="sigma",
-    #                             val=f"{current_node.val}_R",
-    #                             condition=" AND ".join(right_conditions),
-    #                             child=[child_node.child[1]],
-    #                             parent=child_node,
-    #                         )
-    #                         child_node.child[1].parent = right_sigma
-    #                         child_node.child[1] = right_sigma
-
-    #                     if other_conditions:
-    #                         current_node.condition = " AND ".join(other_conditions)
-    #                     else:
-    #                         current_node.type = child_node.type
-    #                         current_node.condition = child_node.condition
-    #                         current_node.val = child_node.val
-    #                         current_node.child = child_node.child
-    #         nodes_to_process.extend(current_node.child)
-            
-    #     return query_tree
 
     """
     Get cost of a query plan by checking the cost of each node in the query tree. Also performs syntax validation on the query structure and 
@@ -528,3 +457,21 @@ class QueryOptimizer:
         
         for child in node.child:
             self.print_query_tree(child, depth + 1)
+
+# tree = {}
+# def get_all_type(query_tree: QueryTree):
+#     if tree.get(query_tree.type) is None:
+#         tree[query_tree.type] = [query_tree]
+#     else:
+#         tree[query_tree.type].append(query_tree)
+#     for child in query_tree.child:
+#         get_all_type(child)
+#
+# test = QueryOptimizer("SELECT * FROM movies JOIN reviews ON movies.movie_id = reviews.movie_id WHERE genre = 'Horror' AND rating > 8;")
+# parse_query = test.parse()
+# get_all_type(parse_query.query_tree)
+#
+# for key in tree.keys():
+#     print(key)
+#     print(tree[key])
+#     print(len(tree[key]))
