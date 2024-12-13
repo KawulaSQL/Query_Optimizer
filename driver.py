@@ -69,7 +69,7 @@ q_j1_5.child.append(q_s1_5)           # First Join -> Selection on genre
 q_j1_5.child.append(q_t5_reviews)     # First Join -> Reviews table
 q_s1_5.child.append(q_t5_movies)      # Selection on genre -> Movies table
 
-test = QueryOptimizer("SELECT movies.movie_id, m.title FROM movies AS m WHERE m.movie_id > 10 ORDER BY m.movie_id;", get_stats())
+test = QueryOptimizer("SELECT * FROM movies natural join reviews natural join awards WHERE genre = 'Horror' AND award_name = 'Scariest Movie';", get_stats())
 
 # test = QueryOptimizer("SELECT m.title, d.name AS director_name, AVG(r.rating) AS average_rating FROM movies m JOIN movie_directors md ON m.movie_id = md.movie_id JOIN directors d ON md.director_id = d.director_id JOIN reviews r ON m.movie_id = r.movie_id WHERE m.genre = 'Action' AND r.rating > 7;", get_stats())
 
