@@ -109,6 +109,13 @@ def apply_selection_rules(optimizer_instance, tree: QueryTree) -> List[QueryTree
             
     return plans
 
+# def rules(optimizer_instance, tree: QueryTree) -> List[QueryTree]
+#     plans = []
+
+#     if (tree.)
+
+
+
 def apply_join_rules(optimizer_instance, tree: QueryTree) -> List[QueryTree]:
     plans = []
     
@@ -164,7 +171,6 @@ def apply_projection_rules(optimizer_instance, tree: QueryTree) -> List[QueryTre
         
         left_attrs = set(get_relation_attributes(optimizer_instance, join_node.child[0]))
         right_attrs = set(get_relation_attributes(optimizer_instance, join_node.child[1]))
-        
         left_proj = projection_attrs.intersection(left_attrs)
         right_proj = projection_attrs.intersection(right_attrs)
         

@@ -1,4 +1,5 @@
 from model.models import QueryTree
+from helper.get_stats import get_stats
 from QueryOptimizer import QueryOptimizer
 
 # MOCK DATA
@@ -68,7 +69,7 @@ q_j1_5.child.append(q_s1_5)           # First Join -> Selection on genre
 q_j1_5.child.append(q_t5_reviews)     # First Join -> Reviews table
 q_s1_5.child.append(q_t5_movies)      # Selection on genre -> Movies table
 
-test = QueryOptimizer("SELECT * FROM movies WHERE 'b' = 'a' or 'a' = age_rating or title >= 'cuki' or genre <> 'horror' order by genre;")
+test = QueryOptimizer("SELECT * FROM movies JOIN reviews ON movies.movie_id = reviews.movie_id JOIN movie_directors ON movie_directors.movie_id = movies.movie_id WHERE movies.genre = 'test';", get_stats())
 
 # test = QueryOptimizer("update movies set genre ='horror' where age_rating = '18+';")
 

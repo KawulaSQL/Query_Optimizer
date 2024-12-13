@@ -274,6 +274,23 @@ class QueryOptimizer:
             raise Exception(f"Error parsing query: {str(e)}")
 
         return self.parse_result
+    
+    def optimize(self, parsed_query: ParsedQuery) -> ParsedQuery:
+        if parsed_query is None or parsed_query.query_tree is None:
+            return parsed_query
+
+        query_plans = generate_query_plans(self, parsed_query.query_tree)
+        
+        min_cost = float('inf')
+        best_plan = parsed_query.query_tree
+        
+        for plan in query_plans:
+            cost = self.get_cost(plan)
+            if cost < min_cost:
+                min_cost = cost
+                best_plan = plan
+                
+        return ParsedQuery(query=parsed_query.query, query_tree=best_plan)
 
     """
     Get cost of a query plan by checking the cost of each node in the query tree. Also performs syntax validation on the query structure and 
