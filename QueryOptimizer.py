@@ -451,8 +451,8 @@ class QueryOptimizer:
                 qt.aliases[alias] = table_name
                 right_node.columns = [f"{table_name}.{col}" for col in stats[table_name]["v_a_r"].keys()] + [f"{alias}.{col}" for col in stats[table_name]["v_a_r"].keys()]
             else:
-                table_name = qt.val
-                right_node.columns = [f"{qt.val}.{col}" for col in stats[qt.val]["v_a_r"].keys()]
+                table_name = right_node.val
+                right_node.columns = [f"{right_node.val}.{col}" for col in stats[right_node.val]["v_a_r"].keys()]
 
             qt.aliases.update(left_node.aliases)
             qt.aliases.update(right_node.aliases)
