@@ -4,8 +4,9 @@ def get_stats() -> Dict[str, Dict[str, Any]]:
     """
     Returns statistical data for tables with specified attributes and relationships.
     """
-    stats = {
-        "movies": {
+    stats = {'student': {'n_r': 49, 'b_r': 1, 'l_r': 162, 'f_r': 49, 'v_a_r': {'id': 49, 'name': 49, 'dept_name': 16, 'total_cred': 15}},
+             'department': {'n_r': 19, 'b_r': 1, 'l_r': 128, 'f_r': 19, 'v_a_r': {'dept_name': 16, 'building': 12, 'budget': 13}},
+                     "movies": {
             "n_r": 1000,               # Total number of movies (tuples)
             "b_r": 60,                 # Total number of storage blocks
             "l_r": 512,                # Size of a single movie record (in bytes)
@@ -80,5 +81,5 @@ def get_stats() -> Dict[str, Dict[str, Any]]:
                 "director_id": 200     # Matches the number of directors
             }
         }
-    }
+            }
     return stats

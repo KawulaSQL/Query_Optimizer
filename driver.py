@@ -51,18 +51,16 @@ q_t_reviews = QueryTree(type="table", val="reviews as r", condition="", child=[]
 # q_j1.child.append(q_t_movies)   # Join m.movie_id = r.movie_id -> Movies table
 # q_j1.child.append(q_t_reviews)  # Join m.movie_id = r.movie_id -> Reviews table
 
-test = QueryOptimizer("SELECT * FROM movies as m join reviews as r on m.movie_id = r.movie_id join awards as a on a.movie_id = m.movie_id where a.movie_id > 10;", get_stats())
+test = QueryOptimizer("SELECT id, department.dept_name FROM student JOIN department ON student.dept_name = department.dept_name;", get_stats())
 
 parse_query = test.parse()
-
 test.print_query_tree(parse_query.query_tree)
 print(test.get_cost(parse_query.query_tree))
-# print(parse_query.query_tree)
 
-optimized_query = test.optimize(parse_query)
-print("\nOptimized Query Tree:")
-test.print_query_tree(optimized_query.query_tree)
-print(test.get_cost(optimized_query.query_tree))
+# optimized_query = test.optimize(parse_query)
+# print("\nOptimized Query Tree:")
+# test.print_query_tree(optimized_query.query_tree)
+# print(test.get_cost(optimized_query.query_tree))
 
 
 # print("------- OPTIMIZER -------")
