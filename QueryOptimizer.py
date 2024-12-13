@@ -396,11 +396,14 @@ class QueryOptimizer:
                     if operator == "=":
                         distinct_values = stats[table_name]["v_a_r"].get(column_name, 1)
                         qt.total_row += round((child_node.total_row - qt.total_row) / distinct_values)
+                        qt.total_block += round((child_node.total_block - qt.total_block) / distinct_values)
                     elif operator == "<>":
                         distinct_values = stats[table_name]["v_a_r"].get(column_name, 1)
                         qt.total_row += (child_node.total_row - qt.total_row) - round((child_node.total_row - qt.total_row) / distinct_values)
+                        qt.total_block += (child_node.total_block - qt.total_block) - round((child_node.total_block - qt.total_block) / distinct_values)
                     else:
                         qt.total_row += (child_node.total_row - qt.total_row) / 2
+                        qt.total_block += (child_node.total_block - qt.total_block) / 2
                 else:
                     if (left_operand.isnumeric() and validate_string(right_operand)) or (validate_string(left_operand) and right_operand.isnumeric()):
                         raise ValueError(f"Incompatible operand types: {left_operand} and {right_operand}.")
@@ -445,20 +448,27 @@ class QueryOptimizer:
             right_node = qt.child[1]
 
             left_node_cost = self.get_cost(left_node)
-
-            table_stats = stats.get(right_node.val.lower().split(" as ")[0])
-            if not table_stats:
-                raise ValueError(f"Table '{right_node.val}' not found in stats.")
+            right_node_cost = self.get_cost(right_node)
             
-            right_node.total_row = table_stats["n_r"]
-            right_node.total_block = table_stats["b_r"]
-            if " as " in right_node.val.lower():
-                table_name, alias = right_node.val.lower().split(" as ")
-                qt.aliases[alias] = table_name
-                right_node.columns = [f"{table_name}.{col}" for col in stats[table_name]["v_a_r"].keys()] + [f"{alias}.{col}" for col in stats[table_name]["v_a_r"].keys()]
+            materialization_cost = 0
+            if right_node.type == "table":
+                table_stats = stats.get(right_node.val.lower().split(" as ")[0])
+                if not table_stats:
+                    raise ValueError(f"Table '{right_node.val}' not found in stats.")
+            
+                right_node.total_row = table_stats["n_r"]
+                right_node.total_block = table_stats["b_r"]
             else:
-                table_name = right_node.val
-                right_node.columns = [f"{right_node.val}.{col}" for col in stats[right_node.val]["v_a_r"].keys()]
+                materialization_cost = right_node.total_block + right_node_cost
+            
+            if right_node.type == "table":
+                if " as " in right_node.val.lower():
+                    table_name, alias = right_node.val.lower().split(" as ")
+                    qt.aliases[alias] = table_name
+                    right_node.columns = [f"{table_name}.{col}" for col in stats[table_name]["v_a_r"].keys()] + [f"{alias}.{col}" for col in stats[table_name]["v_a_r"].keys()]
+                else:
+                    table_name = right_node.val
+                    right_node.columns = [f"{right_node.val}.{col}" for col in stats[right_node.val]["v_a_r"].keys()]
 
             qt.aliases.update(left_node.aliases)
             qt.aliases.update(right_node.aliases)
@@ -466,22 +476,23 @@ class QueryOptimizer:
             combined_columns = set(left_node.columns) | set(right_node.columns)
             conditions = [cond.strip() for cond in qt.condition.lower().split(" or ")]
 
-            for condition in conditions:
-                column_name = None
+            if qt.type == "table":
+                for condition in conditions:
+                    column_name = None
 
-                if condition != "":
-                    operator, left_operand, right_operand = get_operator_operands_from_condition(condition)
+                    if condition != "":
+                        operator, left_operand, right_operand = get_operator_operands_from_condition(condition)
 
-                    table_name, column_name = get_table_column_from_operand(left_operand, combined_columns, stats, qt.aliases)
-                    if column_name is None:
-                        table_name, column_name = get_table_column_from_operand(right_operand, combined_columns, stats, qt.aliases)
-                    
-                    if column_name is None and (left_operand.isnumeric() and validate_string(right_operand)) or (validate_string(left_operand) and right_operand.isnumeric()):
-                            raise ValueError(f"Incompatible operand types: {left_operand} and {right_operand}.")
+                        table_name, column_name = get_table_column_from_operand(left_operand, combined_columns, stats, qt.aliases)
+                        if column_name is None:
+                            table_name, column_name = get_table_column_from_operand(right_operand, combined_columns, stats, qt.aliases)
+                        
+                        if column_name is None and (left_operand.isnumeric() and validate_string(right_operand)) or (validate_string(left_operand) and right_operand.isnumeric()):
+                                raise ValueError(f"Incompatible operand types: {left_operand} and {right_operand}.")
                     
             qt.columns = list(set(left_node.columns) | set(right_node.columns))
             qt.total_row = max(right_node.total_row, left_node.total_row)
-            join_cost = left_node_cost + left_node.total_row * right_node.total_block
+            join_cost = left_node_cost + left_node.total_row * right_node.total_block + materialization_cost
             
             return join_cost
         
