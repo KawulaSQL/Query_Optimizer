@@ -315,21 +315,11 @@ class QueryOptimizer:
         if parsed_query is None or parsed_query.query_tree is None:
             return parsed_query
 
-        # query_plans = generate_query_plans(self, parsed_query.query_tree)
         original_cost = self.get_cost(parsed_query.query_tree)
         best_tree = parsed_query.query_tree
         best_cost = original_cost
 
         optimized_trees = optimize_tree(self, parsed_query.query_tree)
-        
-        # min_cost = float('inf')
-        # best_plan = parsed_query.query_tree
-        
-        # for plan in query_plans:
-        #     cost = self.get_cost(plan)
-        #     if cost < min_cost:
-        #         min_cost = cost
-        #         best_plan = plan
 
         for tree in optimized_trees:
             current_cost = self.get_cost(tree)
