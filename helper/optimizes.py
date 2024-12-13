@@ -67,8 +67,10 @@ def optimize_tree(optimizer_instance, tree: QueryTree) -> List[QueryTree]:
 
     for i in range(len(tree.child)):
         child_optimizations = optimize_tree(optimizer_instance, tree.child[i])
+        # print(optimized_trees)
         if child_optimizations:
             for opt_child in child_optimizations:
+                # print("opt_child:", opt_child)
                 new_tree = copy_tree(optimizer_instance, tree)
                 new_tree.child[i] = opt_child
                 opt_child.parent = new_tree
@@ -84,108 +86,82 @@ def optimize_tree(optimizer_instance, tree: QueryTree) -> List[QueryTree]:
     return optimized_trees
 
 def push_down_selection(optimizer_instance, tree: QueryTree) -> List[QueryTree]:    
+    """
+    Push selection operations down to their matching tables without duplication
+    """
     if not tree.child:
         return []
     
     optimized_trees = []
     child = tree.child[0]
 
-    if child.type in ["join", "natural join"]:
-        left_attrs = set(get_relation_attributes(optimizer_instance, child.child[0]))
-        right_attrs = set(get_relation_attributes(optimizer_instance, child.child[1]))
-        condition_attrs = extract_attributes(optimizer_instance, tree.condition)
-
-        if all(attr in left_attrs for attr in condition_attrs):
-            left_child = child.child[0]
-            # Create new sigma node
-            new_sigma = QueryTree(
-                type="sigma",
-                val=tree.val,
-                condition=tree.condition,
-                child=[left_child]
-            )
+    # Collect all consecutive sigma operations
+    if tree.type == "sigma":
+        sigma_conditions = []
+        current = tree
+        while current and current.type == "sigma":
+            sigma_conditions.append(current.condition)
+            current = current.child[0] if current.child else None
+        
+        # Get the first non-sigma node
+        base_node = current
+        
+        if base_node:
+            # Create a new base tree
+            new_tree = copy_tree(optimizer_instance, base_node)
             
-            # Recursively push down this sigma
-            pushed_trees = push_down_selection(optimizer_instance, new_sigma)
+            # For each condition, determine which table it belongs to
+            condition_table_map = {}
+            for condition in sigma_conditions:
+                condition_attrs = extract_attributes(optimizer_instance, condition)
+                condition_table = condition_attrs.pop().split('.')[0] if condition_attrs else None
+                if condition_table:
+                    if condition_table not in condition_table_map:
+                        condition_table_map[condition_table] = []
+                    condition_table_map[condition_table].append(condition)
             
-            if pushed_trees:
-                # Use the pushed down trees
-                for pushed_tree in pushed_trees:
-                    new_tree = QueryTree(
-                        type="join",
-                        val=child.val,
-                        condition=child.condition,
-                        child=[pushed_tree, child.child[1]]
-                    )
-                    optimized_trees.append(new_tree)
-            else:
-                # If no further pushdown possible, use the new sigma
-                new_tree = QueryTree(
-                    type="join",
-                    val=child.val,
-                    condition=child.condition,
-                    child=[new_sigma, child.child[1]]
-                )
-                optimized_trees.append(new_tree)
-
-        elif all(attr in right_attrs for attr in condition_attrs):
-            right_child = child.child[1]
-            # Similar logic for right side
-            new_sigma = QueryTree(
-                type="sigma",
-                val=tree.val,
-                condition=tree.condition,
-                child=[right_child]
-            )
+            def push_sigmas_to_matching_table(node: QueryTree) -> QueryTree:
+                if not node:
+                    return None
+                
+                if node.type == "table":
+                    table_name = node.val.strip()
+                    if table_name in condition_table_map:
+                        # Apply all conditions for this table
+                        current_node = node
+                        for condition in condition_table_map[table_name]:
+                            current_node = QueryTree(
+                                type="sigma",
+                                val="",
+                                condition=condition,
+                                child=[current_node]
+                            )
+                        return current_node
+                    return node
+                
+                # For joins, process both branches
+                if node.type in ["join", "natural join"]:
+                    new_node = copy_tree(optimizer_instance, node)
+                    new_node.child[0] = push_sigmas_to_matching_table(node.child[0])
+                    new_node.child[1] = push_sigmas_to_matching_table(node.child[1])
+                    return new_node
+                
+                return node
             
-            pushed_trees = push_down_selection(optimizer_instance, new_sigma)
-            
-            if pushed_trees:
-                for pushed_tree in pushed_trees:
-                    new_tree = QueryTree(
-                        type="join",
-                        val=child.val,
-                        condition=child.condition,
-                        child=[child.child[0], pushed_tree]
-                    )
-                    optimized_trees.append(new_tree)
-            else:
-                new_tree = QueryTree(
-                    type="join",
-                    val=child.val,
-                    condition=child.condition,
-                    child=[child.child[0], new_sigma]
-                )
-                optimized_trees.append(new_tree)
+            optimized_tree = push_sigmas_to_matching_table(new_tree)
+            if optimized_tree:
+                optimized_trees.append(optimized_tree)
     
-    elif child.type == "sigma":
-        # Combine the conditions and push them down together
-        new_tree = QueryTree(
-            type="sigma",
-            val=tree.val,
-            condition=f"{tree.condition} AND {child.condition}",
-            child=child.child
-        )
-        # Try to push the combined condition further down
-        pushed_trees = push_down_selection(optimizer_instance, new_tree)
-        if pushed_trees:
-            optimized_trees.extend(pushed_trees)
-        else:
-            optimized_trees.append(new_tree)
-
-    # If no optimizations were possible, keep original tree
-    if not optimized_trees and tree.child:
-        # Try to push down selections in the children
-        child_optimizations = push_down_selection(optimizer_instance, child)
-        if child_optimizations:
-            for opt_child in child_optimizations:
-                new_tree = QueryTree(
-                    type=tree.type,
-                    val=tree.val,
-                    condition=tree.condition,
-                    child=[opt_child]
-                )
-                optimized_trees.append(new_tree)
+    else:
+        # Process children
+        for i in range(len(tree.child)):
+            child_optimizations = push_down_selection(optimizer_instance, tree.child[i])
+            if child_optimizations:
+                for opt_child in child_optimizations:
+                    new_tree = copy_tree(optimizer_instance, tree)
+                    new_tree.child[i] = opt_child
+                    opt_child.parent = new_tree
+                    optimized_trees.append(new_tree)
 
     return optimized_trees
 
