@@ -334,6 +334,12 @@ class QueryOptimizer:
         for tree in optimized_trees:
             current_cost = self.get_cost(tree)
             if current_cost < best_cost:
+                if (tree.type == "join"):
+                    if (best_cost > current_cost):
+                        temp = tree
+                        tempchild = tree.child[0]
+                        tree.child[0] = tree.child[1]
+                        tree.child[1] = tempchild
                 best_cost = current_cost
                 best_tree = tree
                 

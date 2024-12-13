@@ -3,23 +3,24 @@
 import unittest
 from QueryOptimizer import QueryOptimizer
 from model.models import QueryTree, ParsedQuery
+from helper.get_stats import get_stats
 
 class TestQueryOptimizer(unittest.TestCase):
     def setUp(self):
-        self.optimizer = QueryOptimizer("SELECT * FROM movies WHERE genre = 'Horror';")
-        self.optimizer_invalid = QueryOptimizer("SELECT * FROM movies WHERE 'b' = 'a' or 'a' = age_rating;")
+        self.optimizer = QueryOptimizer("SELECT * FROM movies WHERE genre = 'Horror';", get_stats())
+        self.optimizer_invalid = QueryOptimizer("SELECT * FROM movies WHERE 'b' = 'a' or 'a' = age_rating;", get_stats())
 
     def test_parse_valid_query(self):
         parsed_query = self.optimizer.parse()
         self.assertIsInstance(parsed_query, ParsedQuery)
         self.assertIsNotNone(parsed_query.query_tree)
-        self.assertEqual(parsed_query.query, "SELECT * FROM movies WHERE genre = 'Horror';")
+        self.assertEqual(parsed_query.query, "SELECT * FROM movies WHERE genre = 'Horror';", get_stats())
 
     def test_parse_invalid_query(self):
         parsed_query = self.optimizer_invalid.parse()
         self.assertIsInstance(parsed_query, ParsedQuery)
         self.assertIsNotNone(parsed_query.query_tree)
-        self.assertEqual(parsed_query.query, "SELECT * FROM movies WHERE 'b' = 'a' or 'a' = age_rating;")
+        self.assertEqual(parsed_query.query, "SELECT * FROM movies WHERE 'b' = 'a' or 'a' = age_rating;", get_stats())
 
     def test_optimize_query(self):
         parsed_query = self.optimizer.parse()

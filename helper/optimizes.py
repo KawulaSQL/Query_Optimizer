@@ -78,7 +78,7 @@ def optimize_tree(optimizer_instance, tree: QueryTree) -> List[QueryTree]:
         optimized_trees.extend(push_down_selection(optimizer_instance, tree))
     elif tree.type == "project":
         optimized_trees.extend(push_down_projection(optimizer_instance, tree))
-    elif tree.type == "join":
+    elif tree.type in ["join", "natural join"]:
         optimized_trees.extend(optimize_joins(optimizer_instance, tree))
 
     return optimized_trees
@@ -90,14 +90,14 @@ def push_down_selection(optimizer_instance, tree: QueryTree) -> List[QueryTree]:
     optimized_trees = []
     child = tree.child[0]
 
-    if child.type == "join":
+    if child.type in ["join", "natural join"]:
         left_attrs = set(get_relation_attributes(optimizer_instance, child.child[0]))
         right_attrs = set(get_relation_attributes(optimizer_instance, child.child[1]))
         condition_attrs = extract_attributes(optimizer_instance, tree.condition)
 
         if all(attr in left_attrs for attr in condition_attrs):
             left_child = child.child[0]
-            if left_child.type == "join":
+            if left_child.type in ["join", "natural join"]:
                 left_sigma = QueryTree(
                     type="sigma",
                     val=tree.val,
@@ -230,27 +230,103 @@ def push_down_projection(optimizer_instance, tree: QueryTree) -> List[QueryTree]
     optimized_trees = []
     child = tree.child[0]
 
-    if child.type == "join":
-        projection_attrs = set(tree.condition.split(","))
+    if child.type == "project":
+        # 8a
+        new_tree = QueryTree(
+            type="project",
+            val=tree.val,
+            condition=tree.condition, 
+            child=child.child 
+        )
+        optimized_trees.append(new_tree)
 
+    elif child.type == ["join", "natural join"]:
+        projection_attrs = set(tree.condition.split(","))
         left_attrs = set(get_relation_attributes(optimizer_instance, child.child[0]))
         right_attrs = set(get_relation_attributes(optimizer_instance, child.child[1]))
 
-        left_proj = projection_attrs.intersection(left_attrs)
-        right_proj = projection_attrs.intersection(right_attrs)
+        join_condition_attrs = extract_join_attributes(child.condition)
 
-        if left_proj and right_proj:
+        # left attribute
+        l1 = projection_attrs.intersection(left_attrs)
+        # right attribute
+        l2 = projection_attrs.intersection(right_attrs)
+
+        # left attr tapi tidak l1 U l2
+        l3 = {attr for attr in join_condition_attrs if attr in left_rel_attrs and attr not in (l1.union(l2))}
+        # right attr tapi tidak l1 U l2
+        l4 = {attr for attr in join_condition_attrs if attr in right_rel_attrs and attr not in (l1.union(l2))}
+
+        # 8a
+        if l1 and l2:
             new_tree = QueryTree(
                 type="join",
                 val=child.val,
                 condition=child.condition,
                 child=[
-                    QueryTree(type="project", val=tree.val, condition=",".join(left_proj), child=[child.child[0]])
+                    QueryTree(type="project", val=tree.val, condition=",".join(left_proj), child=[child.child[0]]),
+                    QueryTree(type="project", val=tree.val, condition=",".join(right_proj), child=[child.child[1]])
                 ]
             )
             optimized_trees.append(new_tree)
-    
+        else:
+            # 8b
+            left_proj_attrs = l1.union(l3)
+            right_proj_attrs = l2.union(l4)
+
+            new_tree = QueryTree(
+                type="project",
+                val=tree.val,
+                condition=tree.condition,
+                child=[
+                    QueryTree(
+                        type="join",
+                        val=child.val,
+                        condition=child.condition,
+                        child=[
+                            QueryTree(type="project", val=tree.val, 
+                                    condition=",".join(left_proj_attrs), 
+                                    child=[child.child[0]]),
+                            QueryTree(type="project", val=tree.val, 
+                                    condition=",".join(right_proj_attrs), 
+                                    child=[child.child[1]])
+                        ]
+                    )
+                ]
+            )
+            optimized_trees.append(new_tree)
+    else:
+        new_tree = QueryTree(
+            type="project",
+            val=tree.val,
+            condition=tree.condition,
+            child=[child]
+        )
+        optimized_trees.append(new_tree)
+
     return optimized_trees
+
+def extract_join_attributes(condition: str) -> Set[str]:
+    attrs = set()
+    try:
+        if not condition:
+            return attrs
+            
+        conditions = condition.split(" AND ")
+        
+        for cond in conditions:
+            operator, left_operand, right_operand = get_operator_operands_from_condition(cond)
+            
+            for operand in [left_operand, right_operand]:
+                if not (operand.isnumeric() or validate_string(operand)):
+                    if "." in operand:
+                        attrs.add(operand)
+                    else:
+                        attrs.add(operand)
+                        
+        return attrs
+    except:
+        return attrs
 
 def optimize_joins(optimizer_instance, tree: QueryTree) -> List[QueryTree]:
     if len(tree.child) != 2:
@@ -269,11 +345,11 @@ def optimize_joins(optimizer_instance, tree: QueryTree) -> List[QueryTree]:
 
 def extract_joins(optimizer_instance, tree: QueryTree) -> List[tuple]:
     joins = []
-    if tree.type == "join":
+    if tree.type == ["join", "natural join"]:
         joins.append((tree.child[0], tree.child[1], tree.condition))
 
         for child in tree.child:
-            if child.type == "join":
+            if child.type == ["join", "natural join"]:
                 joins.extend(extract_joins(optimizer_instance, child))
     
     return joins
