@@ -45,25 +45,24 @@ q_t_movies = QueryTree(type="table", val="movies as m", condition="", child=[], 
 q_t_reviews = QueryTree(type="table", val="reviews as r", condition="", child=[], parent=q_j1)  # Reviews table as 'r'
 
 # Build the tree
-q_j2.child.append(q_j1)         # Join a.movie_id = m.movie_id -> Second Join
-q_j2.child.append(q_s1)         # Join a.movie_id = m.movie_id -> Selection on a.movie_id
-q_s1.child.append(q_t_awards)
-q_j1.child.append(q_t_movies)   # Join m.movie_id = r.movie_id -> Movies table
-q_j1.child.append(q_t_reviews)  # Join m.movie_id = r.movie_id -> Reviews table
+# q_j2.child.append(q_j1)         # Join a.movie_id = m.movie_id -> Second Join
+# q_j2.child.append(q_s1)         # Join a.movie_id = m.movie_id -> Selection on a.movie_id
+# q_s1.child.append(q_t_awards)
+# q_j1.child.append(q_t_movies)   # Join m.movie_id = r.movie_id -> Movies table
+# q_j1.child.append(q_t_reviews)  # Join m.movie_id = r.movie_id -> Reviews table
 
 test = QueryOptimizer("SELECT * FROM movies as m join reviews as r on m.movie_id = r.movie_id join awards as a on a.movie_id = m.movie_id where a.movie_id > 10;", get_stats())
 
-# parse_query = test.parse()
+parse_query = test.parse()
 
-# test.print_query_tree(parse_query.query_tree)
-# # print(test.get_cost(parse_query.query_tree))
+test.print_query_tree(parse_query.query_tree)
+print(test.get_cost(parse_query.query_tree))
 # print(parse_query.query_tree)
 
-# optimized_query = test.optimize(parse_query)
-# print("\nOptimized Query Tree:")
-# test.print_query_tree(optimized_query.query_tree)
-print(test.print_query_tree(q_j2))
-print(test.get_cost(q_j2))
+optimized_query = test.optimize(parse_query)
+print("\nOptimized Query Tree:")
+test.print_query_tree(optimized_query.query_tree)
+print(test.get_cost(optimized_query.query_tree))
 
 
 # print("------- OPTIMIZER -------")

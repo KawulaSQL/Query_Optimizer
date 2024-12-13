@@ -448,6 +448,7 @@ class QueryOptimizer:
             right_node = qt.child[1]
 
             left_node_cost = self.get_cost(left_node)
+            right_node_cost = self.get_cost(right_node)
             
             materialization_cost = 0
             if right_node.type == "table":
@@ -458,7 +459,7 @@ class QueryOptimizer:
                 right_node.total_row = table_stats["n_r"]
                 right_node.total_block = table_stats["b_r"]
             else:
-                materialization_cost = right_node.total_block * 2
+                materialization_cost = right_node.total_block + right_node_cost
             
             if right_node.type == "table":
                 if " as " in right_node.val.lower():
