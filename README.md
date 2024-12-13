@@ -77,7 +77,7 @@ python -m unittest tests/test_query_optimizer.py
 | Nama            | NIM      | Workload |
 | --------------- | -------- | -------- |
 | Fahrian Afdholi | 13521031 | setup repo and file query optimizer, validation functions, models, parse(), checkpoint document 1,2,3, class diagram, final document |
-| Ferindya Aulia Berlianty  | 13521161 | |
-| Eduardus Alvito Kristiadi   | 13522004 | |
+| Ferindya Aulia Berlianty  | 13521161 | optimize(), final document |
+| Eduardus Alvito Kristiadi   | 13522004 | optimize(), final document, checkpoint document 1,2,3 |
 | Francesco Michael Kusuma   | 13522038 | get_cost(), checkpoint document 1,2,3, final document, unit test |
 | Muhammad Neo Cicero Koda   | 13522108 | get_cost(), checkpoint document 1,2,3, final document, validation functions |

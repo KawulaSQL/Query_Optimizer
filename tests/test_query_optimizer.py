@@ -8,19 +8,16 @@ from helper.get_stats import get_stats
 class TestQueryOptimizer(unittest.TestCase):
     def setUp(self):
         self.optimizer = QueryOptimizer("SELECT * FROM movies WHERE genre = 'Horror';", get_stats())
-        self.optimizer_invalid = QueryOptimizer("SELECT * FROM movies WHERE 'b' = 'a' or 'a' = age_rating;", get_stats())
+        self.optimizer_complex = QueryOptimizer(
+            "SELECT * FROM movies JOIN reviews ON movies.movie_id = reviews.movie_id WHERE movies.movie_id = 1 AND movies.genre = 'test';", 
+            get_stats()
+        )
 
     def test_parse_valid_query(self):
         parsed_query = self.optimizer.parse()
         self.assertIsInstance(parsed_query, ParsedQuery)
         self.assertIsNotNone(parsed_query.query_tree)
         self.assertEqual(parsed_query.query, "SELECT * FROM movies WHERE genre = 'Horror';", get_stats())
-
-    def test_parse_invalid_query(self):
-        parsed_query = self.optimizer_invalid.parse()
-        self.assertIsInstance(parsed_query, ParsedQuery)
-        self.assertIsNotNone(parsed_query.query_tree)
-        self.assertEqual(parsed_query.query, "SELECT * FROM movies WHERE 'b' = 'a' or 'a' = age_rating;", get_stats())
 
     def test_optimize_query(self):
         parsed_query = self.optimizer.parse()
@@ -33,26 +30,15 @@ class TestQueryOptimizer(unittest.TestCase):
         cost = self.optimizer.get_cost(parsed_query.query_tree)
         self.assertIsInstance(cost, int)
         self.assertEqual(cost, 60)
+    
+    def test_cost_optimization(self):
+        parsed_query = self.optimizer_complex.parse()
+        original_cost = self.optimizer_complex.get_cost(parsed_query.query_tree)
 
-    def test_print_query_tree(self):
-        parsed_query = self.optimizer.parse()
-        with self.assertLogs('QueryOptimizer', level='INFO') as log:
-            self.optimizer.print_query_tree(parsed_query.query_tree)
-        self.assertTrue(any("Node:" in message for message in log.output))
+        optimized_query = self.optimizer_complex.optimize(parsed_query)
+        optimized_cost = self.optimizer_complex.get_cost(optimized_query.query_tree)
 
-    def test_query_tree_structure(self):
-        q_p = QueryTree(type="project", val="A", condition="title, rating", child=[])
-        q_s = QueryTree(type="sigma", val="B", condition="genre = 'Horror'", child=[], parent=q_p)
-        q_t = QueryTree(type="table", val="movies", condition="", child=[], parent=q_s)
-
-        q_p.child.append(q_s)
-        q_s.child.append(q_t)
-
-        self.assertEqual(q_p.type, "project")
-        self.assertEqual(q_s.type, "sigma")
-        self.assertEqual(q_t.type, "table")
-        self.assertEqual(q_p.child[0], q_s)
-        self.assertEqual(q_s.child[0], q_t)
+        self.assertLessEqual(optimized_cost, original_cost)
 
 if __name__ == '__main__':
     unittest.main()

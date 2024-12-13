@@ -547,7 +547,6 @@ class QueryOptimizer:
             return child_cost + update_cost
 
     def print_query_tree(self, node, depth=0):
-        # self.logger.info(f"{'  ' * depth}Node: {node.type}, Value: {node.val}, Condition: {node.condition}")
         if node is None:
             return
 
