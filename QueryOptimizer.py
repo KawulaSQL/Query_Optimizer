@@ -2,7 +2,6 @@ import re
 
 from helper.get_object import get_limit, get_column_from_order_by, get_column_from_group_by, get_condition_from_where, \
     get_columns_from_select, get_from_table, extract_set_conditions, extract_table_update, get_operator_operands_from_condition, get_table_column_from_operand
-from helper.get_stats import get_stats
 from helper.validation import validate_query, validate_string
 from helper.optimizes import optimize_tree
 from model.models import ParsedQuery, QueryTree
@@ -118,7 +117,7 @@ class QueryOptimizer:
                     else:
                         self.parse_result.query_tree = q4
 
-                if self.query.upper().find("JOIN") == -1 and self.query.upper().find("NATURAL JOIN") == -1:
+                if self.query.upper().find("JOIN") == -1 and self.query.upper().find("NATURAL JOIN") == -1 and ("," not in self.query):
                     from_table = get_from_table(self.query)
                     q6 = QueryTree(type="table", val=from_table, condition="", child=list())
 
@@ -226,6 +225,43 @@ class QueryOptimizer:
                     else:
                         self.parse_result.query_tree = q7
 
+                elif "," in self.query:
+                    from_table = get_from_table(self.query)
+                    from_table_split = from_table.split(",")
+                    q7 = QueryTree(type="table", val=from_table_split[0], condition="", child=list())
+
+                    for table in from_table_split[1:]:
+                        new_table = QueryTree(type="table", val=table.strip(), condition="", child=list())
+                        q7 = QueryTree(type="join", val=val, condition="", child=[q7, new_table])
+                        q7.child[0].parent = q7
+                        q7.child[1].parent = q7
+                        val = chr(ord(val) + 1)
+
+                    if q6 is not None:
+                        q6.child.append(q7)
+                        q7.parent = q6
+                    elif q5 is not None:
+                        q5.child.append(q7)
+                        q7.parent = q5
+                    elif q4 is not None:
+                        q4.child.append(q7)
+                        q7.parent = q4
+                    elif q3 is not None:
+                        q3.child.append(q7)
+                        q7.parent = q3
+                    elif q2 is not None:
+                        q2.child.append(q7)
+                        q7.parent = q2
+                    elif q1 is not None:
+                        q1.child.append(q7)
+                        q7.parent = q1
+                    elif proj is not None:
+                        proj.child.append(q7)
+                        q7.parent = proj
+                    else:
+                        self.parse_result.query_tree = q7
+
+
             # Parse UPDATE condition
             elif self.query.upper().startswith("UPDATE"):
                 set_condition = extract_set_conditions(self.query)
@@ -311,13 +347,23 @@ class QueryOptimizer:
     def get_cost(self, qt: QueryTree) -> int:
         stats = self.stats
         if qt.type == "table":
-            table_stats = stats.get(qt.val)
+            if " as " in qt.val.lower():
+                table_name, alias = qt.val.lower().split(" as ")
+                qt.aliases[alias] = table_name
+            else:
+                table_name = qt.val
+            
+            table_stats = stats.get(table_name)
             if not table_stats:
                 raise ValueError(f"Table '{qt.val}' not found in stats.")
             
             qt.total_row = table_stats["n_r"]
             qt.total_block = table_stats["b_r"]
-            qt.columns = [f"{qt.val}.{col}" for col in stats[qt.val]["v_a_r"].keys()]
+
+            if " as " in qt.val.lower():
+                qt.columns = [f"{table_name}.{col}" for col in stats[table_name]["v_a_r"].keys()] + [f"{alias}.{col}" for col in stats[table_name]["v_a_r"].keys()]
+            else:
+                qt.columns = [f"{qt.val}.{col}" for col in stats[qt.val]["v_a_r"].keys()]
 
             return qt.total_block
 
@@ -326,6 +372,7 @@ class QueryOptimizer:
             child_cost = self.get_cost(child_node)
 
             qt.columns = child_node.columns
+            qt.aliases = child_node.aliases
 
             conditions = [cond.strip() for cond in qt.condition.lower().split(" or ")]
 
@@ -335,9 +382,9 @@ class QueryOptimizer:
                 column_name = None
                 operator, left_operand, right_operand = get_operator_operands_from_condition(condition)
 
-                table_name, column_name = get_table_column_from_operand(left_operand, child_node.columns, stats)
+                table_name, column_name = get_table_column_from_operand(left_operand, child_node.columns, stats, qt.aliases)
                 if column_name is None:
-                    table_name, column_name = get_table_column_from_operand(right_operand, child_node.columns, stats)
+                    table_name, column_name = get_table_column_from_operand(right_operand, child_node.columns, stats, qt.aliases)
                 
                 if column_name is not None:
                     if operator == "=":
@@ -362,6 +409,7 @@ class QueryOptimizer:
         if qt.type == "project":
             child_node = qt.child[0]
             child_cost = self.get_cost(child_node)
+            qt.aliases = child_node.aliases
 
             projection_columns = [col.strip() for col in qt.condition.split(",")]
 
@@ -377,13 +425,13 @@ class QueryOptimizer:
                     
                     if len(matching_columns) == 0:
                         raise ValueError(f"Column '{column}' is not found in the child's columns: {child_node.columns}")
-                    elif len(matching_columns) > 1:
+                    elif len(matching_columns) > 1 and (qt.aliases.get(matching_columns[0].split(".")[0]) != matching_columns[1].split(".")[0]) and (qt.aliases.get(matching_columns[1].split(".")[0]) != matching_columns[0].split(".")[0]):
                         raise ValueError(f"Ambiguous column name '{column}': matches {matching_columns}")
                     else:
                         validated_columns.append(matching_columns[0])
 
             qt.columns = validated_columns
-
+            
             return child_cost
 
         if qt.type == "join" or qt.type == "natural join":
@@ -392,27 +440,38 @@ class QueryOptimizer:
 
             left_node_cost = self.get_cost(left_node)
 
-            table_stats = stats.get(right_node.val)
+            table_stats = stats.get(right_node.val.lower().split(" as ")[0])
             if not table_stats:
                 raise ValueError(f"Table '{right_node.val}' not found in stats.")
             
             right_node.total_row = table_stats["n_r"]
             right_node.total_block = table_stats["b_r"]
-            right_node.columns = [f"{right_node.val}.{col}" for col in stats[right_node.val]["v_a_r"].keys()]
+            if " as " in right_node.val.lower():
+                table_name, alias = right_node.val.lower().split(" as ")
+                qt.aliases[alias] = table_name
+                right_node.columns = [f"{table_name}.{col}" for col in stats[table_name]["v_a_r"].keys()] + [f"{alias}.{col}" for col in stats[table_name]["v_a_r"].keys()]
+            else:
+                table_name = qt.val
+                right_node.columns = [f"{qt.val}.{col}" for col in stats[qt.val]["v_a_r"].keys()]
+
+            qt.aliases.update(left_node.aliases)
+            qt.aliases.update(right_node.aliases)
 
             combined_columns = set(left_node.columns) | set(right_node.columns)
             conditions = [cond.strip() for cond in qt.condition.lower().split(" or ")]
 
             for condition in conditions:
                 column_name = None
-                operator, left_operand, right_operand = get_operator_operands_from_condition(condition)
 
-                table_name, column_name = get_table_column_from_operand(left_operand, combined_columns, stats)
-                if column_name is None:
-                    table_name, column_name = get_table_column_from_operand(right_operand, combined_columns, stats)
-                
-                if column_name is None and (left_operand.isnumeric() and validate_string(right_operand)) or (validate_string(left_operand) and right_operand.isnumeric()):
-                        raise ValueError(f"Incompatible operand types: {left_operand} and {right_operand}.")
+                if condition != "":
+                    operator, left_operand, right_operand = get_operator_operands_from_condition(condition)
+
+                    table_name, column_name = get_table_column_from_operand(left_operand, combined_columns, stats, qt.aliases)
+                    if column_name is None:
+                        table_name, column_name = get_table_column_from_operand(right_operand, combined_columns, stats, qt.aliases)
+                    
+                    if column_name is None and (left_operand.isnumeric() and validate_string(right_operand)) or (validate_string(left_operand) and right_operand.isnumeric()):
+                            raise ValueError(f"Incompatible operand types: {left_operand} and {right_operand}.")
                     
             qt.columns = list(set(left_node.columns) | set(right_node.columns))
             qt.total_row = max(right_node.total_row, left_node.total_row)
@@ -423,12 +482,16 @@ class QueryOptimizer:
         if qt.type == "limit":
             child_node = qt.child[0]
             child_cost = self.get_cost(child_node)
+            qt.columns = child_node.columns
+            qt.aliases = child_node.aliases
             
             return child_cost + 1
         
         if qt.type == "sort":
             child_node = qt.child[0]
             child_cost = self.get_cost(child_node)
+            qt.columns = child_node.columns
+            qt.aliases = child_node.aliases
 
             if child_node.type == "table":
                 block_size = stats[child_node.val]["f_r"]
@@ -452,6 +515,7 @@ class QueryOptimizer:
         if qt.type == "update":
             child_node = qt.child[0]
             child_cost = self.get_cost(child_node)
+            qt.aliases = child_node.aliases
             
             column = [col.strip() for col in qt.condition.split("=")][0]
             validated_columns = []
@@ -465,7 +529,7 @@ class QueryOptimizer:
                 
                 if len(matching_columns) == 0:
                     raise ValueError(f"Column '{column}' is not found in the child's columns: {child_node.columns}")
-                elif len(matching_columns) > 1:
+                elif len(matching_columns) > 1 and (qt.aliases.get(matching_columns[0].split(".")[0]) != matching_columns[1].split(".")[0]) and (qt.aliases.get(matching_columns[1].split(".")[0]) != matching_columns[0].split(".")[0]):
                     raise ValueError(f"Ambiguous column name '{column}': matches {matching_columns}")
                 else:
                     validated_columns.append(matching_columns[0])
@@ -476,7 +540,7 @@ class QueryOptimizer:
             return child_cost + update_cost
 
     def print_query_tree(self, node, depth=0):
-        self.logger.info(f"{'  ' * depth}Node: {node.type}, Value: {node.val}, Condition: {node.condition}")
+        # self.logger.info(f"{'  ' * depth}Node: {node.type}, Value: {node.val}, Condition: {node.condition}")
         if node is None:
             return
 
@@ -495,8 +559,9 @@ class QueryOptimizer:
 #     for child in query_tree.child:
 #         get_all_type(child)
 #
-# test = QueryOptimizer("SELECT * FROM movies JOIN reviews ON movies.movie_id = reviews.movie_id WHERE genre = 'Horror' AND rating > 8;")
+# test = QueryOptimizer("SELECT * FROM movies, reviews, movies_director;", get_stats())
 # parse_query = test.parse()
+# test.print_query_tree(parse_query.query_tree)
 # get_all_type(parse_query.query_tree)
 #
 # for key in tree.keys():

@@ -69,7 +69,7 @@ q_j1_5.child.append(q_s1_5)           # First Join -> Selection on genre
 q_j1_5.child.append(q_t5_reviews)     # First Join -> Reviews table
 q_s1_5.child.append(q_t5_movies)      # Selection on genre -> Movies table
 
-test = QueryOptimizer("SELECT * FROM movies JOIN reviews ON movies.movie_id = reviews.movie_id JOIN movie_directors ON movie_directors.movie_id = movies.movie_id WHERE movies.genre = 'test';", get_stats())
+test = QueryOptimizer("SELECT review_id, m.movie_id from reviews as r, movies as m;", get_stats())
 
 # test = QueryOptimizer("SELECT m.title, d.name AS director_name, AVG(r.rating) AS average_rating FROM movies m JOIN movie_directors md ON m.movie_id = md.movie_id JOIN directors d ON md.director_id = d.director_id JOIN reviews r ON m.movie_id = r.movie_id WHERE m.genre = 'Action' AND r.rating > 7;", get_stats())
 
@@ -81,12 +81,12 @@ parse_query = test.parse()
 
 test.print_query_tree(parse_query.query_tree)
 print(test.get_cost(parse_query.query_tree))
-print(parse_query.query_tree)
-print(test.optimize(parse_query))
+# print(parse_query.query_tree)
+# print(test.optimize(parse_query))
 
-optimized_query = test.optimize(parse_query)
-print("\nOptimized Query Tree:")
-test.print_query_tree(optimized_query.query_tree)
+# optimized_query = test.optimize(parse_query)
+# print("\nOptimized Query Tree:")
+# test.print_query_tree(optimized_query.query_tree)
 
 
 # print("------- OPTIMIZER -------")

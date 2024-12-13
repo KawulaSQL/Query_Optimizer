@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 
 @dataclass
@@ -12,6 +12,7 @@ class QueryTree:
     total_block: int = 0
     total_row: int = 0
     columns: List[str] = field(default_factory=list)
+    aliases: Dict[str, str] = field(default_factory=dict)
 
 
 @dataclass

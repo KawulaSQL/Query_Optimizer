@@ -71,13 +71,15 @@ def get_operator_operands_from_condition(condition):
         f"Invalid condition '{condition}'. Allowed operators are: {', '.join(allowed_operators)}"
     )
 
-def get_table_column_from_operand(operand, columns, stats):
+def get_table_column_from_operand(operand, columns, stats, aliases):
     if operand.isnumeric() or validate_string(operand):
         return None, None
 
     if "." in operand:
         table_name, column_name = operand.split(".")
-        if table_name not in stats or column_name not in stats[table_name]["v_a_r"]:
+        if (aliases.get(table_name)):
+            table_name = aliases.get(table_name)
+        if (table_name not in stats) or column_name not in stats[table_name]["v_a_r"]:
             raise ValueError(f"Column '{operand}' not found.")
         return table_name, column_name
 
@@ -86,7 +88,7 @@ def get_table_column_from_operand(operand, columns, stats):
         raise ValueError(
             f"Invalid operand '{operand}'. Must be a number, a string in quotes, or an attribute."
         )
-    elif len(matching_columns) > 1:
+    elif len(matching_columns) > 1 and (aliases.get(matching_columns[0].split(".")[0]) != matching_columns[1].split(".")[0]) and (aliases.get(matching_columns[1].split(".")[0]) != matching_columns[0].split(".")[0]):
         raise ValueError(f"Ambiguous column name '{operand}': matches {matching_columns}")
     else:
         return matching_columns[0].split(".")
