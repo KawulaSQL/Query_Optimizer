@@ -169,4 +169,4 @@ def extract_table_update(query):
 
     columns_part = match.group(1).strip()
 
-    return columns_part
+    return columns_partyy

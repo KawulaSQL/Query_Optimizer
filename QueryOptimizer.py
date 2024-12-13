@@ -4,7 +4,7 @@ from helper.get_object import get_limit, get_column_from_order_by, get_column_fr
     get_columns_from_select, get_from_table, extract_set_conditions, extract_table_update, get_operator_operands_from_condition, get_table_column_from_operand
 from helper.get_stats import get_stats
 from helper.validation import validate_query, validate_string
-from helper.optimizes import generate_query_plans
+from helper.optimizes import optimize_tree
 from model.models import ParsedQuery, QueryTree
 import math
 import logging
@@ -279,18 +279,29 @@ class QueryOptimizer:
         if parsed_query is None or parsed_query.query_tree is None:
             return parsed_query
 
-        query_plans = generate_query_plans(self, parsed_query.query_tree)
+        # query_plans = generate_query_plans(self, parsed_query.query_tree)
+        original_cost = self.get_cost(parsed_query.query_tree)
+        best_tree = parsed_query.query_tree
+        best_cost = original_cost
+
+        optimized_trees = optimize_tree(self, parsed_query.query_tree)
         
-        min_cost = float('inf')
-        best_plan = parsed_query.query_tree
+        # min_cost = float('inf')
+        # best_plan = parsed_query.query_tree
         
-        for plan in query_plans:
-            cost = self.get_cost(plan)
-            if cost < min_cost:
-                min_cost = cost
-                best_plan = plan
+        # for plan in query_plans:
+        #     cost = self.get_cost(plan)
+        #     if cost < min_cost:
+        #         min_cost = cost
+        #         best_plan = plan
+
+        for tree in optimized_trees:
+            current_cost = self.get_cost(tree)
+            if current_cost < best_cost:
+                best_cost = current_cost
+                best_tree = tree
                 
-        return ParsedQuery(query=parsed_query.query, query_tree=best_plan)
+        return ParsedQuery(query=parsed_query.query, query_tree=best_tree)
 
     """
     Get cost of a query plan by checking the cost of each node in the query tree. Also performs syntax validation on the query structure and 
