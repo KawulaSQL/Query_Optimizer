@@ -117,7 +117,7 @@ class QueryOptimizer:
                     else:
                         self.parse_result.query_tree = q4
 
-                if self.query.upper().find("JOIN") == -1 and self.query.upper().find("NATURAL JOIN") == -1:
+                if self.query.upper().find("JOIN") == -1 and self.query.upper().find("NATURAL JOIN") == -1 and ("," not in self.query):
                     from_table = get_from_table(self.query)
                     q6 = QueryTree(type="table", val=from_table, condition="", child=list())
 
@@ -224,6 +224,43 @@ class QueryOptimizer:
                         q7.parent = proj
                     else:
                         self.parse_result.query_tree = q7
+
+                elif "," in self.query:
+                    from_table = get_from_table(self.query)
+                    from_table_split = from_table.split(",")
+                    q7 = QueryTree(type="table", val=from_table_split[0], condition="", child=list())
+
+                    for table in from_table_split[1:]:
+                        new_table = QueryTree(type="table", val=table.strip(), condition="", child=list())
+                        q7 = QueryTree(type="join", val=val, condition="", child=[q7, new_table])
+                        q7.child[0].parent = q7
+                        q7.child[1].parent = q7
+                        val = chr(ord(val) + 1)
+
+                    if q6 is not None:
+                        q6.child.append(q7)
+                        q7.parent = q6
+                    elif q5 is not None:
+                        q5.child.append(q7)
+                        q7.parent = q5
+                    elif q4 is not None:
+                        q4.child.append(q7)
+                        q7.parent = q4
+                    elif q3 is not None:
+                        q3.child.append(q7)
+                        q7.parent = q3
+                    elif q2 is not None:
+                        q2.child.append(q7)
+                        q7.parent = q2
+                    elif q1 is not None:
+                        q1.child.append(q7)
+                        q7.parent = q1
+                    elif proj is not None:
+                        proj.child.append(q7)
+                        q7.parent = proj
+                    else:
+                        self.parse_result.query_tree = q7
+
 
             # Parse UPDATE condition
             elif self.query.upper().startswith("UPDATE"):
@@ -514,8 +551,9 @@ class QueryOptimizer:
 #     for child in query_tree.child:
 #         get_all_type(child)
 #
-# test = QueryOptimizer("SELECT * FROM movies JOIN reviews ON movies.movie_id = reviews.movie_id WHERE genre = 'Horror' AND rating > 8;")
+# test = QueryOptimizer("SELECT * FROM movies, reviews, movies_director;", get_stats())
 # parse_query = test.parse()
+# test.print_query_tree(parse_query.query_tree)
 # get_all_type(parse_query.query_tree)
 #
 # for key in tree.keys():
